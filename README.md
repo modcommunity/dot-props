@@ -28,7 +28,7 @@ the tools send intent.
 
 ## Installing
 
-Copy `addons/dot_props/` and [`dot-core`](../dot-core)'s `addons/dot_core/` into your
+Copy `addons/dot_props/` and [`dot-core`](https://github.com/modcommunity/dot-core)'s `addons/dot_core/` into your
 project, and enable dot-props in *Project → Project Settings → Plugins*.
 
 ## Five minutes
