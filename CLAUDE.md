@@ -44,6 +44,44 @@ addons/dot_props/
     dot_grav_gun.gd       pull, carry, punt. A weapon and a toy
 ```
 
+## A prop is not always a 3D one
+
+`DotPropSpawner.spawn` places a `Node3D` and `spawn_2d` places a `Node2D`, and
+everything either side of that placement is the same code: the catalogue, the
+entitlement check, the budget, the interval, the undo stack, the ownership and the
+removal. None of those is about dimension — they are about **who put what in the world
+and what it cost** — and a 2D game that had to re-implement them would be
+re-implementing the whole addon to avoid one `Vector3`.
+
+**Two entry points rather than one widened signature.** Fourteen repositories call
+`spawn(id, player, Vector3)`; changing that is a breaking change across all of them for
+the benefit of the games that are 2D. A `Vector2` and a rotation in radians is also
+what a 2D caller actually holds, and handing it a `Basis` to be thrown away is the sort
+of lie that becomes "why does this crate have a pitch".
+
+`DotPropInstance.node` is therefore typed **`Node`**, not `Node3D`. `body()` /
+`position()` still answer for a 3D prop, `body_2d()` / `position_2d()` are their
+counterparts, and `is_2d()` is the question — asked rather than inferred, because a
+`DotPropDef` deliberately says nothing about dimension and a catalogue holding both is
+a legitimate thing for a game with a 2D world and a 3D menu preview to have.
+
+**If you were writing `instance.node.global_position`, write `instance.position()`.**
+That is the only source change this cost anywhere, and the accessor was always the
+right spelling: `node` is the handle, not the transform.
+
+**Asking for the wrong dimension is refused, and refused without leaking.** A 3D prop
+through `spawn_2d` and a 2D one through `spawn` both return null — and the
+instantiated scene is freed, because a scene that is built and then rejected is a
+leaked node that nothing reports. The suite checks the child count either side of both
+refusals for that reason.
+
+The **tools stay 3D.** A physics gun and a gravity gun are first-person tools with an
+origin and an aim direction, and a 2D game does not want either. The one exception is
+`DotPhysGun.set_frozen`, which handles both bodies — freezing is the one prop operation
+a 2D game does need (a lobby pins its furniture; a sandbox pins a wall), and a second
+copy of "zero the velocities, then set the mode" is a second thing that can forget the
+first half.
+
 ## A definition is checkable without loading the scene
 
 The same reasoning as `DotItem` in dot-loadout and `DotAvatarSchema` in
@@ -170,7 +208,7 @@ godot --headless --path . --import
 find . -name '*.gd' -not -path './.godot/*' | while read f; do
     godot --headless --path . --check-only --script "res://${f#./}"
 done
-godot --headless --path . res://examples/props_selftest.tscn   # 104 checks
+godot --headless --path . res://examples/props_selftest.tscn   # 118 checks
 ```
 
 The suite spawns **real** `RigidBody3D`s into a real tree, because a limit that
@@ -219,6 +257,7 @@ Three bugs it found, none of which errored — and a fourth found by game-playgr
 | Telling the player why a spawn failed | `DotPropSpawner.refused` |
 | Doing something to everything in the world | `DotPropSpawner.all_props`, which hands out a copy |
 | A prop that has code behind it | `DotPropDef.meta`, read on `spawned`. See game-playground's entities |
+| A prop in a 2D world | `DotPropSpawner.spawn_2d`. See game-simple-lobby and game-hungario |
 
 ## Things deliberately not here
 

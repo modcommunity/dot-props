@@ -35,6 +35,7 @@ func _run() -> void:
 	_test_definitions()
 	_test_catalogue()
 	_test_spawning()
+	_test_spawning_2d()
 	_test_authority()
 	_test_budget()
 	_test_cooldown()
@@ -89,6 +90,16 @@ func _catalogue() -> DotPropCatalogue:
 	scenery.can_grab = false
 	scenery.can_freeze = false
 	catalogue.add(scenery)
+
+	# A 2D prop, in the same catalogue as the 3D ones on purpose. A [DotPropDef]
+	# deliberately says nothing about dimension — it is an id, a scene, a cost and a
+	# permission — so a catalogue holding both is a legitimate thing for a game with a
+	# 2D world to have, and the spawner has to pick the right entry point rather than
+	# infer one.
+	var bench := DotPropDef.make(&"bench", "res://fixtures/prop_body_2d.tscn")
+	bench.category = &"furniture"
+	bench.mass = 55.0
+	catalogue.add(bench)
 
 	var locked := DotPropDef.make(&"gold_crate", "res://fixtures/prop_body.tscn")
 	locked.category = &"premium"
@@ -145,7 +156,7 @@ func _test_catalogue() -> void:
 
 	var catalogue := _catalogue()
 
-	_check(catalogue.size() == 4, "four props go in")
+	_check(catalogue.size() == 5, "five props go in", "%d" % catalogue.size())
 	_check(catalogue.has(&"crate"), "and can be found")
 	_check(catalogue.categories().size() >= 1, "categories are listed")
 	_check(catalogue.in_category(&"props").size() == 2, "and filtered")
@@ -159,7 +170,7 @@ func _test_catalogue() -> void:
 		"%d" % partial.size())
 
 	var parsed := DotPropCatalogue.from_json(catalogue.to_json())
-	_check(parsed.ok and (parsed.value as DotPropCatalogue).size() == 4,
+	_check(parsed.ok and (parsed.value as DotPropCatalogue).size() == 5,
 		"and the catalogue round-trips")
 
 	var tolerant := DotPropCatalogue.from_dictionary({
@@ -227,11 +238,90 @@ func _test_spawning() -> void:
 
 	# And from a child, because a physics query hits a collider that is a child of
 	# the prop's root.
-	var collider := crate.node.get_child(0)
+	var collider: Node = crate.node.get_child(0)
 	_check(spawner.prop_for_node(collider) == crate,
 		"and so does one of its children")
 
 	spawner.queue_free()
+
+
+## The same spawner, into a 2D world.
+##
+## [b]The point of this section is that everything except the placement is shared.[/b]
+## The budget, the interval, the undo stack, the ownership and the removal are the same
+## code — so what is worth checking is the three lines that differ and the one thing a
+## mixed catalogue makes possible: asking for a 2D prop through the 3D entry point, and
+## the reverse. Both have to be refused rather than half-built, because a scene that is
+## instantiated and then rejected is a leaked node that nothing reports.
+func _test_spawning_2d() -> void:
+	print("spawning in 2D")
+
+	var world_2d := Node2D.new()
+	_world.add_child(world_2d)
+
+	var spawner := DotPropSpawner.new()
+	spawner.catalogue = _catalogue()
+	spawner.limits = DotPropLimits.new()
+	spawner.limits.spawn_interval = 0.0
+	spawner.authoritative = true
+	# The props go into the 2D world rather than under the spawner, which is a plain
+	# Node and would give them no transform of their own to be placed in.
+	spawner.world_ref = DotNodeRef.of_path(^"..")
+	world_2d.add_child(spawner)
+
+	var bench := spawner.spawn_2d(&"bench", &"alice", Vector2(120.0, -40.0), 0.5)
+
+	_check(bench != null, "a 2D prop spawns")
+	_check(bench != null and bench.is_alive(), "and its node is in the tree")
+	_check(bench != null and bench.is_2d(), "and it knows it is 2D")
+	_check(
+		bench != null and bench.position_2d().is_equal_approx(Vector2(120.0, -40.0)),
+		"where it was asked for",
+		str(bench.position_2d()) if bench != null else "null"
+	)
+	_check(
+		bench != null and is_equal_approx(bench.body_2d().mass, 55.0),
+		"with the mass its definition gives it",
+		"%.1f kg" % (bench.body_2d().mass if bench != null else -1.0)
+	)
+	# The books are the shared half, and they are what a 2D game is actually buying.
+	_check(spawner.world_count() == 1, "the world counts it")
+	_check(spawner.player_count(&"alice") == 1, "and so does its owner")
+
+	# Freezing is the one prop operation a 2D game needs and it lives on the physics
+	# gun, which is a 3D tool. It handles both, in the one place that also zeroes the
+	# velocities — a body frozen while moving otherwise leaps away when somebody thaws
+	# it, minutes later, with nothing to connect the two.
+	bench.body_2d().linear_velocity = Vector2(400.0, 0.0)
+	DotPhysGun.set_frozen(bench, true)
+	_check(bench.frozen and bench.body_2d().freeze, "and it freezes")
+	_check(
+		bench.body_2d().linear_velocity == Vector2.ZERO,
+		"with its velocity zeroed rather than stored up"
+	)
+
+	var before := world_2d.get_child_count()
+
+	# A 3D prop through the 2D door, and a 2D prop through the 3D one. Both refused,
+	# and — the part worth checking — neither leaves its instantiated scene behind.
+	_check(
+		spawner.spawn_2d(&"crate", &"alice", Vector2.ZERO) == null,
+		"a 3D prop asked for in 2D is refused"
+	)
+	_check(
+		spawner.spawn(&"bench", &"alice", Vector3.ZERO) == null,
+		"and a 2D prop asked for in 3D"
+	)
+	_check(
+		world_2d.get_child_count() == before,
+		"leaving nothing behind either time",
+		"%d children, was %d" % [world_2d.get_child_count(), before]
+	)
+
+	_check(spawner.undo(&"alice"), "undo works on it like any other prop")
+	_check(spawner.world_count() == 0, "and the world is empty again")
+
+	world_2d.queue_free()
 
 
 func _test_authority() -> void:
@@ -661,7 +751,7 @@ func _test_physgun_holds() -> void:
 		await get_tree().physics_frame
 
 	var goal := origin + direction * gun.hold_distance
-	var distance := crate.node.global_position.distance_to(goal)
+	var distance := crate.position().distance_to(goal)
 
 	_check(distance < 1.0, "a held prop converges on where it is aimed",
 		"%.2f m away" % distance)
@@ -760,7 +850,7 @@ func _test_gravgun_punts() -> void:
 		gun.carry(origin, aim, 1.0 / 60.0)
 		await get_tree().physics_frame
 
-	var carried_at := crate.node.global_position.distance_to(
+	var carried_at := crate.position().distance_to(
 		origin + aim * gun.carry_distance
 	)
 	_check(carried_at < 1.5, "a carried prop sits in front of the player",

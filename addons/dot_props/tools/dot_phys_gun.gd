@@ -242,16 +242,32 @@ static func set_frozen(prop: DotPropInstance, frozen: bool) -> void:
 	if prop == null or not prop.is_alive():
 		return
 
+	# [b]Both dimensions, in the one place freezing is done.[/b] A physics gun is a 3D
+	# tool and nothing else here is, but freezing is the one prop operation a 2D game
+	# also needs — a lobby pins its furniture, a sandbox pins a wall — and a second
+	# copy of "zero the velocities, then set the mode" is a second thing that can
+	# forget the first half. See [method DotPropSpawner.spawn_2d].
 	var body := prop.body()
 
-	if body == null:
+	if body != null:
+		if frozen:
+			body.linear_velocity = Vector3.ZERO
+			body.angular_velocity = Vector3.ZERO
+
+		body.freeze = frozen
+		prop.frozen = frozen
+		return
+
+	var body_2d := prop.body_2d()
+
+	if body_2d == null:
 		return
 
 	if frozen:
-		body.linear_velocity = Vector3.ZERO
-		body.angular_velocity = Vector3.ZERO
+		body_2d.linear_velocity = Vector2.ZERO
+		body_2d.angular_velocity = 0.0
 
-	body.freeze = frozen
+	body_2d.freeze = frozen
 	prop.frozen = frozen
 
 

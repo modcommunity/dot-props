@@ -138,54 +138,13 @@ func spawn(
 	orientation: Basis = Basis.IDENTITY,
 	entitlements: Callable = Callable()
 ) -> DotPropInstance:
-	if not authoritative:
-		_refuse(player_id, prop_id, "This client may not spawn props.")
+	var prepared := _prepare(prop_id, player_id, entitlements)
+
+	if prepared.is_empty():
 		return null
 
-	if catalogue == null:
-		_refuse(player_id, prop_id, "This server has no prop catalogue.")
-		return null
-
-	var def := catalogue.get_prop(prop_id)
-
-	if def == null or not def.enabled:
-		_refuse(player_id, prop_id, "No such prop.")
-		return null
-
-	if def.entitlement != &"" and entitlements.is_valid():
-		if not bool(entitlements.call(def.entitlement)):
-			_refuse(player_id, prop_id, "You do not have that prop.")
-			return null
-
-	var allowed := may_spawn(def, player_id)
-
-	if not allowed.ok:
-		_refuse(player_id, prop_id, allowed.error.message)
-		return null
-
-	if not ResourceLoader.exists(def.scene_path):
-		# A prop in the catalogue whose content is not mounted. Distinguished from
-		# "no such prop" because the two need different fixes: this one is a missing
-		# pack, and telling the player "no such prop" sends them to the wrong place.
-		_refuse(
-			player_id, prop_id,
-			"That prop's content is not loaded on this server."
-		)
-		return null
-
-	var scene: Resource = load(def.scene_path)
-
-	if not (scene is PackedScene):
-		_refuse(player_id, prop_id, "That prop's scene is not a PackedScene.")
-		return null
-
-	var resolved := _resolve_world()
-
-	if not resolved.ok:
-		_refuse(player_id, prop_id, resolved.error.message)
-		return null
-
-	var node := (scene as PackedScene).instantiate()
+	var def: DotPropDef = prepared[0]
+	var node: Node = prepared[1]
 
 	if not (node is Node3D):
 		node.queue_free()
@@ -213,6 +172,119 @@ func spawn(
 	# step.
 	if body is RigidBody3D:
 		(body as RigidBody3D).mass = def.mass
+
+	return _adopt(def, body, player_id)
+
+
+## The same spawn, into a 2D world.
+##
+## [b]A separate entry point rather than a dimension flag, and rather than widening
+## [method spawn]'s signature.[/b] Fourteen repositories call `spawn(id, player, Vector3)`
+## and a signature change there is a breaking change across all of them for the benefit of
+## the two games that are 2D. A [Vector2] and a rotation in radians is also what a 2D
+## caller actually holds; handing it a [Basis] to be thrown away is the sort of lie that
+## becomes "why does this crate have a pitch".
+##
+## Everything else — the catalogue, the entitlement check, the budget, the interval, the
+## undo stack, the ownership and the removal — is shared, because none of it is about
+## dimension. What differs is three lines: the node type accepted, where it is placed, and
+## which rigid body gets the mass.
+func spawn_2d(
+	prop_id: StringName,
+	player_id: StringName,
+	at: Vector2,
+	rotation: float = 0.0,
+	entitlements: Callable = Callable()
+) -> DotPropInstance:
+	var prepared := _prepare(prop_id, player_id, entitlements)
+
+	if prepared.is_empty():
+		return null
+
+	var def: DotPropDef = prepared[0]
+	var node: Node = prepared[1]
+
+	if not (node is Node2D):
+		node.queue_free()
+		_refuse(player_id, prop_id, "That prop's scene is not a Node2D.")
+		return null
+
+	var body := node as Node2D
+	body.position = at
+	body.rotation = rotation
+
+	# Same reasoning as the 3D branch above, and the same ordering: before the body is
+	# in the tree, so the first physics step already has it.
+	if body is RigidBody2D:
+		(body as RigidBody2D).mass = def.mass
+
+	return _adopt(def, body, player_id)
+
+
+## Everything both spawns do before the node exists: the checks, and the instantiation.
+##
+## Returns `[def, node]`, or an empty array when the spawn was refused — the refusal has
+## already been reported to [signal refused] by then, because the caller has no more
+## information about why than this does.
+func _prepare(
+	prop_id: StringName, player_id: StringName, entitlements: Callable
+) -> Array:
+	if not authoritative:
+		_refuse(player_id, prop_id, "This client may not spawn props.")
+		return []
+
+	if catalogue == null:
+		_refuse(player_id, prop_id, "This server has no prop catalogue.")
+		return []
+
+	var def := catalogue.get_prop(prop_id)
+
+	if def == null or not def.enabled:
+		_refuse(player_id, prop_id, "No such prop.")
+		return []
+
+	if def.entitlement != &"" and entitlements.is_valid():
+		if not bool(entitlements.call(def.entitlement)):
+			_refuse(player_id, prop_id, "You do not have that prop.")
+			return []
+
+	var allowed := may_spawn(def, player_id)
+
+	if not allowed.ok:
+		_refuse(player_id, prop_id, allowed.error.message)
+		return []
+
+	if not ResourceLoader.exists(def.scene_path):
+		# A prop in the catalogue whose content is not mounted. Distinguished from
+		# "no such prop" because the two need different fixes: this one is a missing
+		# pack, and telling the player "no such prop" sends them to the wrong place.
+		_refuse(
+			player_id, prop_id,
+			"That prop's content is not loaded on this server."
+		)
+		return []
+
+	var scene: Resource = load(def.scene_path)
+
+	if not (scene is PackedScene):
+		_refuse(player_id, prop_id, "That prop's scene is not a PackedScene.")
+		return []
+
+	return [def, (scene as PackedScene).instantiate()]
+
+
+## Puts a placed node into the world and into the books. Shared by both spawns.
+##
+## [b]The world is resolved here, after the node exists and is placed.[/b] The other
+## order — resolve, then instantiate — leaks the node on a world that cannot be resolved,
+## which is a leak nothing reports because the spawn "correctly" refused.
+func _adopt(def: DotPropDef, body: Node, player_id: StringName) -> DotPropInstance:
+	var resolved := _resolve_world()
+
+	if not resolved.ok:
+		body.queue_free()
+		_refuse(player_id, def.id, resolved.error.message)
+		return null
 
 	(resolved.value as Node).add_child(body)
 

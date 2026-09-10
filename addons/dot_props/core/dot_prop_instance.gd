@@ -12,7 +12,15 @@ extends RefCounted
 var def: DotPropDef = null
 
 ## The node in the world. May be freed; check with [method is_alive].
-var node: Node3D = null
+##
+## [b]Typed [Node] rather than [Node3D], because a prop is not always a 3D one.[/b]
+## The catalogue, the budgets, the undo stack and the ownership rules are all
+## dimension-free — they are about who put what in the world and what it cost — and the
+## only 3D thing about a prop is its transform. A 2D game spawning through
+## [method DotPropSpawner.spawn_2d] gets a [Node2D] here and everything else works
+## unchanged; [method body] and [method position] still answer for a 3D one, and
+## [method body_2d] / [method position_2d] are their counterparts.
+var node: Node = null
 
 ## Who spawned it.
 var owner_id: StringName = &""
@@ -57,12 +65,35 @@ func is_held() -> bool:
 	return held_by != &""
 
 
+## The rigid body, when this is a 3D prop and its scene root is one. Null otherwise.
 func body() -> RigidBody3D:
 	return node as RigidBody3D
 
 
+## The rigid body, when this is a 2D prop and its scene root is one. Null otherwise.
+func body_2d() -> RigidBody2D:
+	return node as RigidBody2D
+
+
+## Whether this prop lives in a 2D world.
+##
+## Asked rather than assumed: a host holding a mixed catalogue — which is what a game
+## with a 2D world and a 3D menu preview is — cannot tell from the definition, because
+## a [DotPropDef] deliberately says nothing about dimension. The node knows.
+func is_2d() -> bool:
+	return node is Node2D
+
+
 func position() -> Vector3:
-	return node.global_position if is_alive() else Vector3.ZERO
+	if not is_alive() or not (node is Node3D):
+		return Vector3.ZERO
+	return (node as Node3D).global_position
+
+
+func position_2d() -> Vector2:
+	if not is_alive() or not (node is Node2D):
+		return Vector2.ZERO
+	return (node as Node2D).global_position
 
 
 func describe() -> Dictionary:
