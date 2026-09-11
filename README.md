@@ -12,13 +12,13 @@ This asset, along with all the others, was built initially with **Claude Code** 
 I intend on reviewing code, testing, and editing documentation regularly. If you're interested in helping out, please let me know!
 
 ## A Sandbox Layer
-**A sandbox layer for Godot 4** — spawnable props, the limits that keep a server alive, and the tools that move them.
+**A sandbox layer for Godot 4.** Spawnable props, the limits that keep a server alive, and the tools that move them.
 
 A physics gun that holds, rotates and freezes; a gravity gun that pulls, carries and punts; a catalogue an operator edits as JSON; per-player budgets, a spawn cooldown, an undo stack, and cleanup when somebody leaves.
 
 ## Server-authoritative, and not predicted
 
-Rigid-body physics is not reproducible across machines — the solver's iteration order and the last bits of every float differ — so a predicted prop is a prop that is corrected constantly. The server owns every prop; the client draws what it is told; the tools send intent.
+Rigid-body physics is not reproducible across machines, because the solver's iteration order and the last bits of every float differ, so a predicted prop is a prop that is corrected constantly. The server owns every prop; the client draws what it is told; the tools send intent.
 
 ## Installing
 
