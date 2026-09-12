@@ -275,3 +275,17 @@ Three bugs it found, none of which errored — and a fourth found by game-playgr
   decision.
 - **Content delivery.** `DotPropDef.content_id` says which pack a prop lives in;
   mounting it is dot-cloud's and the host's, exactly as `DotMapDef` does it.
+
+## `DotPhysGun` has signals now, and it had none
+
+`grab`, `release` and `set_frozen` changed a prop's state and told nobody, so a game could
+not react to any of the three. That is not a small gap once collision layers are involved:
+`DotPhysicsLayout.sandbox_3d` has a `held_prop` row and a `frozen_prop` row — the two rows
+only a sandbox has a use for — and without a signal a game could set a prop's layer at
+spawn and then be wrong for the rest of its life. A carried crate that still collides with
+the player carrying it shoves them backwards down a corridor.
+
+`grabbed`, `released` and `freeze_changed` are the three. **`set_frozen` does not emit**,
+because it is static and a static function cannot emit an instance signal; a game calling
+it directly is changing the state behind the tool's back and gets nothing, which is the
+honest report of what a static can offer.

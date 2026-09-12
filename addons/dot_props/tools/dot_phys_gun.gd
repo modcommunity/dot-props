@@ -57,6 +57,25 @@ var hold_rotation: Basis = Basis.IDENTITY
 ## Whether the player is currently rotating the prop instead of turning their view.
 var rotating: bool = false
 
+## A prop was picked up. [b]Emitted after [member DotPropInstance.held_by] is set.[/b]
+##
+## This class had no signals at all, which meant a game could not react to any of the
+## three state changes it makes. That is not a small gap: a held prop, a frozen prop and
+## a loose one want different collision layers — `DotPhysicsLayout.sandbox_3d` has
+## `held_prop` and `frozen_prop` rows for exactly that — and without a signal a game can
+## only set the layer at spawn and then be wrong for the rest of the prop's life.
+signal grabbed(prop: DotPropInstance, wielder: StringName)
+
+## A prop was let go. Emitted after [member DotPropInstance.held_by] is cleared.
+signal released(prop: DotPropInstance, wielder: StringName)
+
+## A prop was frozen or thawed by THIS tool.
+##
+## [b]Not emitted by [method set_frozen], which is static and cannot emit anything.[/b] A
+## game that calls the static directly is changing the state behind the tool's back and
+## gets no signal — which is the honest report of what a static function can offer.
+signal freeze_changed(prop: DotPropInstance, frozen: bool)
+
 
 ## Grabs whatever the tool is pointing at.
 func grab(
@@ -92,6 +111,7 @@ func grab(
 	# doing something alarming.
 	if prop.frozen:
 		set_frozen(prop, false)
+		freeze_changed.emit(prop, false)
 
 	hold_distance = clampf(
 		origin.distance_to(body.global_position),
@@ -101,6 +121,9 @@ func grab(
 
 	# The prop's orientation in the player's frame at the moment of the grab.
 	hold_rotation = view.inverse() * body.global_basis
+
+	# Last, so a handler sees a prop that is fully held rather than half-grabbed.
+	grabbed.emit(prop, wielder)
 
 	return DotResult.success(prop)
 
@@ -196,6 +219,7 @@ func release() -> DotPropInstance:
 		prop.held_by = &""
 
 	held = null
+	released.emit(prop, wielder)
 
 	return prop
 
@@ -228,6 +252,7 @@ func freeze_held() -> DotResult:
 	var prop := held
 	release()
 	set_frozen(prop, true)
+	freeze_changed.emit(prop, true)
 
 	return DotResult.success(prop)
 
