@@ -74,6 +74,51 @@ enum Size {
 ## Whether the prop may be frozen in place.
 @export var can_freeze: bool = true
 
+## Whether a player standing on this prop rides it and presses down on it.
+##
+## [b]On by default, and it is the difference between a crate and scenery.[/b] A
+## [RigidBody3D] a player stands on does nothing about it on its own: the character
+## motor in this family sweeps a shape and slides, so it treats a crate exactly as it
+## treats the floor — the crate does not sink, does not tip, and does not carry the
+## player anywhere when something shoves it. [DotPropCarry] is the half that makes it
+## behave like an object, and this is the flag that says a given prop wants it. Off
+## for anything a player is meant to treat as ground.
+@export var rideable: bool = true
+
+@export_group("Damage")
+
+## Hit points, or 0 for a prop nothing can break.
+##
+## [b]Zero is indestructible rather than "dies to anything", and that asymmetry is
+## deliberate.[/b] Every prop written before this field existed decodes to 0, and the
+## alternative default would make every one of them breakable the moment a game added
+## a damage source — which is a sandbox where the floor can be destroyed by accident.
+@export_range(0.0, 100000.0, 1.0) var max_health: float = 0.0
+
+## Speed of impact, in m/s, above which a collision breaks this prop outright.
+##
+## Zero means impacts never break it and only [method DotPropDamage.hurt] can. This is
+## separate from [member max_health] because the two answer different questions: a
+## crate has to survive being walked into and not survive being hit by a bus, and the
+## thing that separates those is closing speed rather than accumulated damage.
+@export_range(0.0, 1000.0, 0.5) var break_impact_speed: float = 0.0
+
+## Radius in metres of the explosion this prop makes when it breaks. Zero for none.
+##
+## [b]This addon does not explode anything.[/b] It has no damage model and must not
+## grow one — dot-combat already owns that, and a second one would be a second set of
+## rules about who a blast hurts. What these three fields are is a [i]description[/i]
+## of a blast, emitted on [signal DotPropDamage.exploded] for a game to hand to
+## [code]DotCombatManager.explode[/code]. The prop knows it is a barrel; only the game
+## knows what a barrel does to a person.
+@export_range(0.0, 100.0, 0.5) var explode_radius: float = 0.0
+
+## Damage at the centre of that explosion, falling off to zero at the radius.
+@export_range(0.0, 10000.0, 1.0) var explode_damage: float = 0.0
+
+## Impulse applied to other props inside the radius, in newton-seconds.
+@export var explode_force: float = 0.0
+
 ## What one of these costs against a player's budget. See [DotPropLimits].
 ##
 ## Separate from [member size] so a server can make one specific prop expensive
@@ -124,6 +169,16 @@ func validate() -> DotResult:
 			DotError.CODE_INVALID, "A prop needs a scene path.", String(id)
 		)
 
+	# A blast with a radius and no damage and no force is a barrel that goes off and
+	# does nothing, which reads as the explosion being broken rather than as the
+	# numbers being unset. Refused here, where the message can name the prop.
+	if explode_radius > 0.0 and explode_damage <= 0.0 and explode_force <= 0.0:
+		return DotResult.fail(
+			DotError.CODE_INVALID,
+			"A prop with an explode_radius needs explode_damage or explode_force.",
+			String(id),
+		)
+
 	return DotResult.success(null)
 
 
@@ -147,6 +202,16 @@ func to_dictionary() -> Dictionary:
 		out["can_grab"] = false
 	if not can_freeze:
 		out["can_freeze"] = false
+	if not rideable:
+		out["rideable"] = false
+	if max_health > 0.0:
+		out["max_health"] = max_health
+	if break_impact_speed > 0.0:
+		out["break_impact_speed"] = break_impact_speed
+	if explode_radius > 0.0:
+		out["explode_radius"] = explode_radius
+		out["explode_damage"] = explode_damage
+		out["explode_force"] = explode_force
 	if entitlement != &"":
 		out["entitlement"] = String(entitlement)
 	if permission != "":
@@ -175,6 +240,12 @@ static func from_dictionary(data: Dictionary) -> DotPropDef:
 	prop.cost = clampi(int(data.get("cost", 1)), 1, 100)
 	prop.can_grab = bool(data.get("can_grab", true))
 	prop.can_freeze = bool(data.get("can_freeze", true))
+	prop.rideable = bool(data.get("rideable", true))
+	prop.max_health = maxf(float(data.get("max_health", 0.0)), 0.0)
+	prop.break_impact_speed = maxf(float(data.get("break_impact_speed", 0.0)), 0.0)
+	prop.explode_radius = maxf(float(data.get("explode_radius", 0.0)), 0.0)
+	prop.explode_damage = maxf(float(data.get("explode_damage", 0.0)), 0.0)
+	prop.explode_force = maxf(float(data.get("explode_force", 0.0)), 0.0)
 	prop.entitlement = StringName(str(data.get("entitlement", "")))
 	prop.permission = str(data.get("permission", ""))
 	prop.enabled = bool(data.get("enabled", true))
@@ -200,6 +271,9 @@ func describe() -> Dictionary:
 		"mass": "%.1f kg" % mass,
 		"cost": cost,
 		"grabbable": can_grab,
+		"rideable": rideable,
+		"health": max_health if max_health > 0.0 else "indestructible",
+		"explodes": "%.1f m" % explode_radius if explode_radius > 0.0 else false,
 	}
 
 

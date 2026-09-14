@@ -13,7 +13,7 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 118
+const CHECKS := 169
 
 var _passed := 0
 var _failed := 0
@@ -52,6 +52,12 @@ func _run() -> void:
 	await _test_physgun_holds()
 	await _test_physgun_caps_speed()
 	await _test_gravgun_punts()
+	_test_breaking()
+	_test_breaking_authority()
+	_test_impact()
+	await _test_explosion()
+	_test_carry()
+	await _test_carry_pushes()
 
 	print("")
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -941,3 +947,340 @@ func _test_gravgun_punts() -> void:
 	)
 
 	spawner.queue_free()
+
+
+# --- Breaking --------------------------------------------------------------
+
+func _damage_node(spawner: DotPropSpawner) -> DotPropDamage:
+	var damage := DotPropDamage.new()
+	damage.authoritative = true
+	spawner.add_child(damage)
+	return damage
+
+
+func _breakables() -> DotPropCatalogue:
+	var catalogue := _catalogue()
+
+	var box := DotPropDef.make(&"box", "res://fixtures/prop_body.tscn")
+	box.max_health = 100.0
+	box.break_impact_speed = 12.0
+	catalogue.add(box)
+
+	var barrel := DotPropDef.make(&"barrel", "res://fixtures/prop_body.tscn")
+	barrel.max_health = 20.0
+	barrel.explode_radius = 6.0
+	barrel.explode_damage = 90.0
+	barrel.explode_force = 400.0
+	catalogue.add(barrel)
+
+	var anvil := DotPropDef.make(&"anvil", "res://fixtures/prop_body.tscn")
+	anvil.rideable = false
+	catalogue.add(anvil)
+
+	return catalogue
+
+
+func _test_breaking() -> void:
+	print("breaking a prop")
+
+	var spawner := _spawner()
+	spawner.catalogue = _breakables()
+	spawner.limits.spawn_interval = 0.0
+	spawner.limits.per_player_budget = 40
+	spawner.limits.world_budget = 80
+	var damage := _damage_node(spawner)
+
+	var crate := spawner.spawn(&"crate", &"alice", Vector3(0.0, 1.0, 0.0))
+	var box := spawner.spawn(&"box", &"alice", Vector3(4.0, 1.0, 0.0))
+
+	_check(not damage.is_breakable(crate.instance_id),
+		"a prop with no max_health is indestructible")
+	_check(damage.health_of(crate.instance_id) < 0.0,
+		"and answers -1 rather than 0, which would read as about to break")
+	_check(damage.is_breakable(box.instance_id), "one with max_health is tracked")
+	_check(is_equal_approx(damage.health_of(box.instance_id), 100.0),
+		"at full health", "%.0f" % damage.health_of(box.instance_id))
+
+	var hurt := damage.hurt(box.instance_id, 40.0, &"alice")
+	_check(hurt.ok, "hurting it succeeds")
+	_check(is_equal_approx(float(hurt.value), 60.0), "and reports what is left",
+		"%.0f" % float(hurt.value))
+	_check(box.is_alive(), "and the prop is still there")
+
+	# Captured into an Array rather than into locals: a GDScript lambda captures by
+	# value, so a captured int assigned inside a handler stays at its initial value
+	# outside it while an Array mutated inside one is visible. See docs.
+	var seen: Array = []
+	damage.broken.connect(func(p: DotPropInstance, at: Vector3, by: StringName) -> void:
+		seen.append({"alive": p.is_alive(), "at": at, "by": by}))
+
+	var killed := damage.hurt(box.instance_id, 60.0, &"alice")
+	_check(killed.ok and is_equal_approx(float(killed.value), 0.0),
+		"the blow that reaches zero breaks it")
+	_check(seen.size() == 1, "broken fires once", "%d" % seen.size())
+	_check(seen.size() == 1 and bool((seen[0] as Dictionary)["alive"]),
+		"and fires while the prop is still alive, so debris has somewhere to go")
+	_check(seen.size() == 1 and StringName((seen[0] as Dictionary)["by"]) == &"alice",
+		"carrying who broke it")
+	_check(not box.is_alive(), "and the prop leaves the world")
+	_check(spawner.player_count(&"alice") == 1,
+		"and stops counting against its owner's budget",
+		"%d" % spawner.player_count(&"alice"))
+
+	var gone := damage.hurt(box.instance_id, 10.0)
+	_check(not gone.ok, "hurting a prop that is already gone is refused")
+
+	var solid := damage.hurt(crate.instance_id, 10.0)
+	_check(not solid.ok and solid.error.code == DotError.CODE_UNSUPPORTED,
+		"hurting an indestructible prop is refused as unsupported")
+
+	_check(not damage.hurt(crate.instance_id, -5.0).ok, "negative damage is refused")
+
+
+func _test_breaking_authority() -> void:
+	print("and who may break one")
+
+	var spawner := _spawner()
+	spawner.catalogue = _breakables()
+	spawner.limits.spawn_interval = 0.0
+
+	var damage := DotPropDamage.new()
+	damage.authoritative = false
+	spawner.add_child(damage)
+
+	var box := spawner.spawn(&"box", &"alice", Vector3.ZERO)
+
+	_check(damage.is_breakable(box.instance_id),
+		"a client's damage node still tracks health, so it can draw a damaged crate")
+
+	var refused := damage.hurt(box.instance_id, 500.0)
+	_check(not refused.ok and refused.error.code == DotError.CODE_FORBIDDEN,
+		"but may not hurt anything")
+	_check(not damage.break_now(box.instance_id).ok, "nor break one outright")
+	_check(box.is_alive(), "and the prop survives")
+
+
+func _test_impact() -> void:
+	print("an impact rather than a wound")
+
+	var spawner := _spawner()
+	spawner.catalogue = _breakables()
+	spawner.limits.spawn_interval = 0.0
+	spawner.limits.per_player_budget = 40
+	var damage := _damage_node(spawner)
+
+	var box := spawner.spawn(&"box", &"alice", Vector3.ZERO)
+
+	_check(not damage.impact(box.instance_id, 4.0), "a slow bump does nothing")
+	_check(box.is_alive(), "and the prop survives being walked into")
+	_check(is_equal_approx(damage.health_of(box.instance_id), 100.0),
+		"at full health, because an impact is not damage")
+
+	_check(damage.impact(box.instance_id, 20.0, &"bus"), "a fast one breaks it outright")
+	_check(not box.is_alive(), "and the prop is gone")
+
+	var crate := spawner.spawn(&"crate", &"alice", Vector3.ZERO)
+	_check(not damage.impact(crate.instance_id, 500.0),
+		"a prop with no break_impact_speed is never broken by one")
+
+	var second := spawner.spawn(&"box", &"alice", Vector3.ZERO)
+	_check(damage.break_now(second.instance_id).ok, "break_now breaks whatever the health")
+	_check(not second.is_alive(), "immediately")
+
+
+func _test_explosion() -> void:
+	print("a barrel")
+
+	var spawner := _spawner()
+	spawner.catalogue = _breakables()
+	spawner.limits.spawn_interval = 0.0
+	spawner.limits.per_player_budget = 40
+	spawner.limits.world_budget = 80
+	var damage := _damage_node(spawner)
+
+	var barrel := spawner.spawn(&"barrel", &"alice", Vector3.ZERO)
+	var near := spawner.spawn(&"crate", &"alice", Vector3(2.0, 0.0, 0.0))
+	var far := spawner.spawn(&"crate", &"alice", Vector3(40.0, 0.0, 0.0))
+
+	# Gravity off on both, so what is measured is the blast rather than the fall. The
+	# first version of this check read `linear_velocity.length()` one physics step
+	# after the barrel went off and reported the crate 40 m away as "shoved" at
+	# 0.16 m/s, which was one tick of gravity and nothing to do with the explosion.
+	for crate_body in [near.body(), far.body()]:
+		crate_body.freeze = false
+		crate_body.gravity_scale = 0.0
+		crate_body.linear_velocity = Vector3.ZERO
+
+	var blasts: Array = []
+	damage.exploded.connect(
+		func(at: Vector3, radius: float, dmg: float, force: float, by: StringName) -> void:
+			blasts.append({"at": at, "radius": radius, "damage": dmg, "force": force, "by": by}))
+
+	damage.hurt(barrel.instance_id, 999.0, &"alice")
+
+	# The blast's shove is an impulse, and an impulse is not readable in
+	# `linear_velocity` until the step that consumes it has run. This addon's own
+	# notes record paying for that twice; this is the third time, and the first
+	# version of this check reported a barrel that moved nothing.
+	await get_tree().physics_frame
+
+	_check(blasts.size() == 1, "breaking a barrel describes one blast", "%d" % blasts.size())
+	var blast: Dictionary = blasts[0] if blasts.size() == 1 else {}
+	_check(blasts.size() == 1 and is_equal_approx(float(blast["radius"]), 6.0),
+		"with the radius its definition carries")
+	_check(blasts.size() == 1 and is_equal_approx(float(blast["damage"]), 90.0),
+		"and the damage, which this addon applies to nobody")
+
+	# The push IS this addon's, because a prop is the one thing it knows about.
+	_check(near.body().linear_velocity.length() > 0.1,
+		"a prop inside the radius is shoved",
+		"%.2f m/s" % near.body().linear_velocity.length())
+	_check(far.body().linear_velocity.length() < 0.001,
+		"and one outside it is not",
+		"%.2f m/s" % far.body().linear_velocity.length())
+
+	var crate := spawner.spawn(&"crate", &"alice", Vector3.ZERO)
+	var quiet: Array = []
+	damage.exploded.connect(func(_a: Vector3, _r: float, _d: float, _f: float, _b: StringName) -> void:
+		quiet.append(true))
+	damage.break_now(crate.instance_id)
+	_check(quiet.is_empty(), "a prop with no explode_radius describes no blast")
+
+	var silly := DotPropDef.make(&"dud", "res://fixtures/prop_body.tscn")
+	silly.explode_radius = 5.0
+	_check(not silly.validate().ok,
+		"a blast with no damage and no force is refused, not shipped as a dud barrel")
+
+
+# --- Standing on one -------------------------------------------------------
+
+func _test_carry() -> void:
+	print("standing on a prop")
+
+	var spawner := _spawner()
+	spawner.catalogue = _breakables()
+	spawner.limits.spawn_interval = 0.0
+	spawner.limits.per_player_budget = 40
+
+	var carry := DotPropCarry.new()
+	spawner.add_child(carry)
+
+	var box := spawner.spawn(&"box", &"alice", Vector3(0.0, 1.0, 0.0))
+	var anvil := spawner.spawn(&"anvil", &"alice", Vector3(9.0, 1.0, 0.0))
+
+	_check(carry.prop_under(box.node.get_instance_id()) == box,
+		"the prop under a player is found from the motor's ground_id")
+	_check(carry.prop_under(0) == null, "an airborne player is on nothing")
+	_check(carry.prop_under(_world.get_instance_id()) == null,
+		"and the world is not a prop, so nobody can ride the floor")
+	_check(carry.prop_under(anvil.node.get_instance_id()) == null,
+		"a prop marked rideable = false is scenery, not a platform")
+
+	var body := box.body()
+	body.freeze = false
+	body.linear_velocity = Vector3(3.0, 0.0, 0.0)
+	body.angular_velocity = Vector3.ZERO
+
+	var at_centre := carry.velocity_at(box.node.get_instance_id(), body.global_position)
+	_check(at_centre.is_equal_approx(Vector3(3.0, 0.0, 0.0)),
+		"a sliding prop carries a player at its own speed", str(at_centre))
+
+	# The half that is invisible without it: on a TURNING prop every point moves at a
+	# different speed, so a player on the edge of one is carried faster than its
+	# centre. Take only the linear part and they drift toward the middle, silently.
+	body.linear_velocity = Vector3.ZERO
+	body.angular_velocity = Vector3(0.0, 2.0, 0.0)
+	var edge := body.global_position + Vector3(1.0, 0.0, 0.0)
+	var at_edge := carry.velocity_at(box.node.get_instance_id(), edge)
+	_check(at_edge.length() > 1.0,
+		"a spinning prop carries the edge of itself, not just its centre",
+		"%.2f m/s" % at_edge.length())
+	_check(carry.velocity_at(box.node.get_instance_id(), body.global_position).length() < 0.01,
+		"while its centre stays put")
+
+	body.angular_velocity = Vector3.ZERO
+	body.linear_velocity = Vector3(5000.0, 0.0, 0.0)
+	var capped := carry.velocity_at(box.node.get_instance_id(), body.global_position)
+	_check(capped.length() <= carry.max_carry_speed + 0.001,
+		"a prop having a bad frame cannot throw a player out of the world",
+		"%.0f m/s" % capped.length())
+
+	body.linear_velocity = Vector3(2.0, 0.0, 0.0)
+	var lift := carry.ride(box.node.get_instance_id(), body.global_position, 80.0, 0.5)
+	_check(lift.is_equal_approx(Vector3(1.0, 0.0, 0.0)),
+		"ride returns the displacement for the tick", str(lift))
+	_check(carry.ride(0, Vector3.ZERO, 80.0, 0.5) == Vector3.ZERO,
+		"and zero for a player on nothing, so a caller can add it unconditionally")
+
+
+func _test_carry_pushes() -> void:
+	print("and pressing down on it")
+
+	var spawner := _spawner()
+	spawner.catalogue = _breakables()
+	spawner.limits.spawn_interval = 0.0
+	spawner.limits.per_player_budget = 40
+
+	var carry := DotPropCarry.new()
+	spawner.add_child(carry)
+
+	var box := spawner.spawn(&"box", &"alice", Vector3(0.0, 40.0, 0.0))
+	var body := box.body()
+	body.freeze = false
+	body.gravity_scale = 0.0
+	body.linear_velocity = Vector3.ZERO
+	body.angular_velocity = Vector3.ZERO
+
+	await get_tree().physics_frame
+
+	carry.stand(box.node.get_instance_id(), body.global_position, 80.0, 1.0 / 60.0)
+
+	# An impulse is not readable in linear_velocity until the step that consumes it
+	# has run. This addon's own suite has paid for that twice.
+	await get_tree().physics_frame
+
+	_check(body.linear_velocity.y < -0.01,
+		"a player standing on a prop presses it down",
+		"%.3f m/s" % body.linear_velocity.y)
+
+	var tipper := spawner.spawn(&"box", &"alice", Vector3(0.0, 40.0, 20.0))
+	var tipping := tipper.body()
+	tipping.freeze = false
+	tipping.gravity_scale = 0.0
+	tipping.linear_velocity = Vector3.ZERO
+	tipping.angular_velocity = Vector3.ZERO
+	await get_tree().physics_frame
+
+	# On the EDGE, which is what makes a crate tip rather than sink flat.
+	carry.stand(
+		tipper.node.get_instance_id(),
+		tipping.global_position + Vector3(0.5, 0.0, 0.0),
+		80.0,
+		1.0 / 60.0,
+	)
+	await get_tree().physics_frame
+
+	_check(tipping.angular_velocity.length() > 0.0001,
+		"and standing on its edge tips it",
+		"%.4f rad/s" % tipping.angular_velocity.length())
+
+	var pushed := spawner.spawn(&"box", &"alice", Vector3(0.0, 40.0, 40.0))
+	var pushed_body := pushed.body()
+	pushed_body.freeze = false
+	pushed_body.gravity_scale = 0.0
+	pushed_body.linear_velocity = Vector3.ZERO
+	await get_tree().physics_frame
+
+	_check(
+		carry.push(pushed.instance_id, pushed_body.global_position, Vector3(50.0, 0.0, 0.0)),
+		"walking into a prop shoves it"
+	)
+	await get_tree().physics_frame
+	_check(pushed_body.linear_velocity.x > 0.01, "and it moves",
+		"%.2f m/s" % pushed_body.linear_velocity.x)
+
+	var anvil := spawner.spawn(&"anvil", &"alice", Vector3(0.0, 40.0, 60.0))
+	_check(not carry.push(anvil.instance_id, Vector3.ZERO, Vector3.RIGHT),
+		"a prop that is not rideable is not pushable either")
+	_check(not carry.push(999999, Vector3.ZERO, Vector3.RIGHT),
+		"and an id that is not a prop at all is refused")
