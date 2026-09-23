@@ -10,7 +10,10 @@ extends RefCounted
 ##
 ## Subclasses: [DotPhysGun], [DotGravGun].
 
-const CHANNEL := "props.tool"
+# No log channel: per-tick targeting for whoever holds the tool. A refusal (not yours,
+# too heavy, somebody else is holding it) goes back to that player, and a line per
+# refused grab would be a line per frame of somebody holding the button. No subclass
+# (phys gun, grav gun, a game's weapon) used it either.
 
 ## The spawner that owns the props this tool acts on.
 var spawner: DotPropSpawner = null
