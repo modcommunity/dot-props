@@ -15,9 +15,17 @@ extends Node
 
 const CHECKS := 169
 
+## Sections entered against sections that ran to their last line, and against this. A
+## runtime error inside a section aborts that function and nothing says so; a section that
+## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
+## total is the other half — see docs/testing.md.
+const SECTIONS := 24
+
 var _passed := 0
 var _failed := 0
 var _failures := PackedStringArray()
+var _entered := 0
+var _completed := 0
 
 var _world: Node3D = null
 
@@ -65,6 +73,13 @@ func _run() -> void:
 	for line in _failures:
 		print("  FAIL  %s" % line)
 
+	print("%d of %d sections ran to their last line" % [_completed, _entered])
+	if _entered != SECTIONS or _completed != _entered:
+		print("ERROR: %d sections entered and %d completed, %d expected. One aborted or was skipped." % [
+			_entered, _completed, SECTIONS
+		])
+		get_tree().quit(1)
+		return
 	# The total the section counter cannot be. A runtime error inside a section aborts
 	# that function, and the counter is satisfied because the section had already
 	# announced itself. See docs/testing.md.
@@ -75,6 +90,16 @@ func _run() -> void:
 		get_tree().quit(1)
 		return
 	get_tree().quit(1 if _failed > 0 else 0)
+
+
+func _section(title: String) -> void:
+	_entered += 1
+	print(title)
+
+
+## A section reached its last line. See [constant SECTIONS].
+func _done() -> void:
+	_completed += 1
 
 
 func _check(ok: bool, what: String, detail: String = "") -> void:
@@ -138,7 +163,7 @@ func _spawner(limits: DotPropLimits = null) -> DotPropSpawner:
 # --- Definitions -----------------------------------------------------------
 
 func _test_definitions() -> void:
-	print("prop definitions")
+	_section("prop definitions")
 
 	var crate := DotPropDef.make(&"crate", "res://fixtures/prop_body.tscn")
 	_check(crate.validate().ok, "a prop validates")
@@ -166,10 +191,11 @@ func _test_definitions() -> void:
 	var copy := DotPropDef.from_dictionary(crate.to_dictionary())
 	copy.meta["a"] = 2
 	_check(int(crate.meta["a"]) == 1, "and a copy does not share its meta dictionary")
+	_done()
 
 
 func _test_catalogue() -> void:
-	print("the catalogue")
+	_section("the catalogue")
 
 	var catalogue := _catalogue()
 
@@ -202,12 +228,13 @@ func _test_catalogue() -> void:
 		tolerant.ok and (tolerant.value as DotPropCatalogue).size() == 2,
 		"one bad entry does not condemn the file"
 	)
+	_done()
 
 
 # --- Spawning --------------------------------------------------------------
 
 func _test_spawning() -> void:
-	print("spawning")
+	_section("spawning")
 
 	var spawner := _spawner()
 
@@ -260,6 +287,7 @@ func _test_spawning() -> void:
 		"and so does one of its children")
 
 	spawner.queue_free()
+	_done()
 
 
 ## The same spawner, into a 2D world.
@@ -271,7 +299,7 @@ func _test_spawning() -> void:
 ## the reverse. Both have to be refused rather than half-built, because a scene that is
 ## instantiated and then rejected is a leaked node that nothing reports.
 func _test_spawning_2d() -> void:
-	print("spawning in 2D")
+	_section("spawning in 2D")
 
 	var world_2d := Node2D.new()
 	_world.add_child(world_2d)
@@ -339,10 +367,11 @@ func _test_spawning_2d() -> void:
 	_check(spawner.world_count() == 0, "and the world is empty again")
 
 	world_2d.queue_free()
+	_done()
 
 
 func _test_authority() -> void:
-	print("authority")
+	_section("authority")
 
 	var spawner := _spawner()
 	spawner.authoritative = false
@@ -361,10 +390,11 @@ func _test_authority() -> void:
 	_check(not spawner.remove(1), "and refuses to remove")
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_budget() -> void:
-	print("the per-player budget")
+	_section("the per-player budget")
 
 	var limits := DotPropLimits.new()
 	limits.per_player_budget = 10
@@ -395,10 +425,11 @@ func _test_budget() -> void:
 
 	spawner.queue_free()
 	costly.queue_free()
+	_done()
 
 
 func _test_cooldown() -> void:
-	print("the spawn cooldown")
+	_section("the spawn cooldown")
 
 	# The budget alone does not stop a held key: a player who reaches it, removes
 	# one and spawns another can still spawn as fast as their key repeats.
@@ -427,10 +458,11 @@ func _test_cooldown() -> void:
 		"and the clock only moves when the host advances it")
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_world_budget() -> void:
-	print("the world budget")
+	_section("the world budget")
 
 	# Not the per-player budget times the slot count: thirty players each within
 	# their own is thirty times the physics.
@@ -449,10 +481,11 @@ func _test_world_budget() -> void:
 		"and nobody may add a seventh, however empty their own budget")
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_undo() -> void:
-	print("undo")
+	_section("undo")
 
 	var limits := DotPropLimits.new()
 	limits.spawn_interval = 0.0
@@ -488,10 +521,11 @@ func _test_undo() -> void:
 	_check(not spawner.undo(&"nobody"), "undo for a player with nothing is refused")
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_cleanup_on_leave() -> void:
-	print("cleanup when a player leaves")
+	_section("cleanup when a player leaves")
 
 	var limits := DotPropLimits.new()
 	limits.spawn_interval = 0.0
@@ -530,10 +564,11 @@ func _test_cleanup_on_leave() -> void:
 
 	spawner.queue_free()
 	persistent.queue_free()
+	_done()
 
 
 func _test_no_leaked_nodes() -> void:
-	print("nothing leaks")
+	_section("nothing leaks")
 
 	var limits := DotPropLimits.new()
 	limits.spawn_interval = 0.0
@@ -560,12 +595,13 @@ func _test_no_leaked_nodes() -> void:
 	_check(alive == 0, "and every node is actually freed", "%d still alive" % alive)
 
 	spawner.queue_free()
+	_done()
 
 
 # --- Tools -----------------------------------------------------------------
 
 func _test_tool_permissions() -> void:
-	print("what a tool may act on")
+	_section("what a tool may act on")
 
 	var spawner := _spawner()
 	spawner.limits.spawn_interval = 0.0
@@ -600,10 +636,11 @@ func _test_tool_permissions() -> void:
 	_check(not tool.may_act_on(heavy).ok, "a prop over the mass limit is refused")
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_freezing() -> void:
-	print("freezing")
+	_section("freezing")
 
 	var spawner := _spawner()
 	spawner.limits.spawn_interval = 0.0
@@ -631,10 +668,11 @@ func _test_freezing() -> void:
 	_check(not crate.frozen, "and can be unfrozen")
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_freeze_limit() -> void:
-	print("the freeze limit")
+	_section("the freeze limit")
 
 	# A frozen prop costs nothing to simulate, so it has its own ceiling rather than
 	# sharing the physics budget — and that ceiling has to actually be enforced,
@@ -689,10 +727,11 @@ func _test_freeze_limit() -> void:
 	_check(bob_gun.freeze_held().ok, "and another player has their own")
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_size_ceiling() -> void:
-	print("the size ceiling")
+	_section("the size ceiling")
 
 	# A size class answers a different question from a cost. A cost is a budget —
 	# twenty small props or two big ones. This is a ceiling: allow a hundred crates
@@ -739,10 +778,11 @@ func _test_size_ceiling() -> void:
 	)
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_physgun_holds() -> void:
-	print("the physics gun")
+	_section("the physics gun")
 
 	var spawner := _spawner()
 	spawner.limits.spawn_interval = 0.0
@@ -808,10 +848,11 @@ func _test_physgun_holds() -> void:
 	_check(gun.held == null, "a prop removed while held is let go of, not crashed on")
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_physgun_caps_speed() -> void:
-	print("the physics gun's speed cap")
+	_section("the physics gun's speed cap")
 
 	var spawner := _spawner()
 	spawner.limits.spawn_interval = 0.0
@@ -843,10 +884,11 @@ func _test_physgun_caps_speed() -> void:
 	)
 
 	spawner.queue_free()
+	_done()
 
 
 func _test_gravgun_punts() -> void:
-	print("the gravity gun")
+	_section("the gravity gun")
 
 	var spawner := _spawner()
 	spawner.limits.spawn_interval = 0.0
@@ -947,6 +989,7 @@ func _test_gravgun_punts() -> void:
 	)
 
 	spawner.queue_free()
+	_done()
 
 
 # --- Breaking --------------------------------------------------------------
@@ -981,7 +1024,7 @@ func _breakables() -> DotPropCatalogue:
 
 
 func _test_breaking() -> void:
-	print("breaking a prop")
+	_section("breaking a prop")
 
 	var spawner := _spawner()
 	spawner.catalogue = _breakables()
@@ -1035,10 +1078,11 @@ func _test_breaking() -> void:
 		"hurting an indestructible prop is refused as unsupported")
 
 	_check(not damage.hurt(crate.instance_id, -5.0).ok, "negative damage is refused")
+	_done()
 
 
 func _test_breaking_authority() -> void:
-	print("and who may break one")
+	_section("and who may break one")
 
 	var spawner := _spawner()
 	spawner.catalogue = _breakables()
@@ -1058,10 +1102,11 @@ func _test_breaking_authority() -> void:
 		"but may not hurt anything")
 	_check(not damage.break_now(box.instance_id).ok, "nor break one outright")
 	_check(box.is_alive(), "and the prop survives")
+	_done()
 
 
 func _test_impact() -> void:
-	print("an impact rather than a wound")
+	_section("an impact rather than a wound")
 
 	var spawner := _spawner()
 	spawner.catalogue = _breakables()
@@ -1086,10 +1131,11 @@ func _test_impact() -> void:
 	var second := spawner.spawn(&"box", &"alice", Vector3.ZERO)
 	_check(damage.break_now(second.instance_id).ok, "break_now breaks whatever the health")
 	_check(not second.is_alive(), "immediately")
+	_done()
 
 
 func _test_explosion() -> void:
-	print("a barrel")
+	_section("a barrel")
 
 	var spawner := _spawner()
 	spawner.catalogue = _breakables()
@@ -1150,12 +1196,13 @@ func _test_explosion() -> void:
 	silly.explode_radius = 5.0
 	_check(not silly.validate().ok,
 		"a blast with no damage and no force is refused, not shipped as a dud barrel")
+	_done()
 
 
 # --- Standing on one -------------------------------------------------------
 
 func _test_carry() -> void:
-	print("standing on a prop")
+	_section("standing on a prop")
 
 	var spawner := _spawner()
 	spawner.catalogue = _breakables()
@@ -1211,10 +1258,11 @@ func _test_carry() -> void:
 		"ride returns the displacement for the tick", str(lift))
 	_check(carry.ride(0, Vector3.ZERO, 80.0, 0.5) == Vector3.ZERO,
 		"and zero for a player on nothing, so a caller can add it unconditionally")
+	_done()
 
 
 func _test_carry_pushes() -> void:
-	print("and pressing down on it")
+	_section("and pressing down on it")
 
 	var spawner := _spawner()
 	spawner.catalogue = _breakables()
@@ -1284,3 +1332,4 @@ func _test_carry_pushes() -> void:
 		"a prop that is not rideable is not pushable either")
 	_check(not carry.push(999999, Vector3.ZERO, Vector3.RIGHT),
 		"and an id that is not a prop at all is refused")
+	_done()
