@@ -139,6 +139,10 @@ as from their history, so:
 Passing the undo depth means the oldest can no longer be undone. It does not mean the
 prop disappears, and it does not mean it stops being yours.
 
+## Protected owners (2026-10-06)
+
+`DotPropSpawner.set_protected(player_id, on)` makes an owner's props untouchable by anybody else: `DotPropTool.may_act_on` refuses every other wielder (before, and regardless of, the server's touch-others rule), and `DotPropDamage.hurt`, `break_now` and `impact` refuse any `by` that is not the owner, including none. It is what a building server calls creative mode, and it lives here rather than in a game because every tool and every source of harm already asks the spawner: a game keeping its own set would have to remember it at every call, and the first one it forgot would be the way round it. `player_left` drops the protection. `props_selftest`'s *a protected owner's props*.
+
 ## `is_alive()` is not "the node is valid"
 
 `queue_free()` is deferred, so `is_instance_valid` stays true for the rest of the

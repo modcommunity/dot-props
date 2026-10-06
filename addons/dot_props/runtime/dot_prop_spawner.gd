@@ -580,8 +580,46 @@ func clear_all(reason: StringName = REASON_ADMIN) -> int:
 	return count
 
 
+# --- Protected owners ---------------------------------------------------------
+
+## Owners whose props nobody else may act on: no tool, no gun, no damage. The building
+## servers call it creative mode or build mode — somebody who wants to build in peace
+## while the rest of the server plays. Checked in [method DotPropTool.may_act_on] and
+## [method DotPropDamage.hurt], so every tool and every source of harm in this addon asks
+## one set, whatever a server's "touch other people's props" rule says.
+##
+## [b]Here, not in a game, because the props are here.[/b] A game that kept its own set
+## would have to remember it at every tool call, and the first tool it forgot would be the
+## way round it.
+var _protected: Dictionary = {}
+
+
+## Turns protection of [param player_id]'s props on or off.
+func set_protected(player_id: StringName, on: bool) -> void:
+	if player_id == &"":
+		return
+
+	if on:
+		_protected[player_id] = true
+	else:
+		_protected.erase(player_id)
+
+
+func is_protected(player_id: StringName) -> bool:
+	return _protected.has(player_id)
+
+
+## Whether [param actor] may act on [param prop]: always on their own, never on a
+## protected owner's.
+func may_act_for(prop: DotPropInstance, actor: StringName) -> bool:
+	return prop == null or prop.owner_id == actor or not _protected.has(prop.owner_id)
+
+
 ## Called by the host when a player disconnects.
 func player_left(player_id: StringName) -> int:
+	# A protection outliving its owner would shield props nobody can ever unprotect.
+	_protected.erase(player_id)
+
 	if limits != null and not limits.clean_up_on_leave:
 		# Kept, but disowned: the props stay and stop counting against a budget
 		# nobody is using. A persistent build server wants exactly this, and without
@@ -730,6 +768,7 @@ func describe() -> Dictionary:
 		"players": _by_player.size(),
 		"spawned": spawn_count,
 		"refused": refusal_count,
+		"protected": _protected.size(),
 		"limits": limits.describe_summary() if limits != null else "none",
 	}
 

@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 179
+const CHECKS := 188
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 25
+const SECTIONS := 26
 
 var _passed := 0
 var _failed := 0
@@ -55,6 +55,7 @@ func _run() -> void:
 	_test_cleanup_on_leave()
 	_test_no_leaked_nodes()
 	_test_tool_permissions()
+	_test_protected_owners()
 	_test_freezing()
 	_test_freeze_limit()
 	_test_size_ceiling()
@@ -682,6 +683,45 @@ func _test_tool_permissions() -> void:
 	spawner.limits.grab_mass_limit = 100.0
 	var heavy := spawner.spawn(&"safe", &"alice", Vector3.ZERO)
 	_check(not tool.may_act_on(heavy).ok, "a prop over the mass limit is refused")
+
+	spawner.queue_free()
+	_done()
+
+
+## Creative mode, as the addon has it: an owner nobody else's tool or damage reaches.
+func _test_protected_owners() -> void:
+	_section("a protected owner's props")
+
+	var spawner := _spawner()
+	spawner.catalogue = _breakables()
+	spawner.limits.spawn_interval = 0.0
+	var damage := _damage_node(spawner)
+
+	var tool := DotPropTool.new()
+	tool.spawner = spawner
+	tool.wielder = &"alice"
+	var bob_tool := DotPropTool.new()
+	bob_tool.spawner = spawner
+	bob_tool.wielder = &"bob"
+
+	var bobs := spawner.spawn(&"box", &"bob", Vector3(0.0, 1.0, 0.0))
+	spawner.set_protected(&"bob", true)
+	_check(spawner.is_protected(&"bob") and not spawner.is_protected(&"alice"), "protection is per owner")
+	var refused := tool.may_act_on(bobs)
+	_check(not refused.ok and refused.error.code == DotError.CODE_FORBIDDEN, "nobody else's tool may act on their props")
+	_check(not tool.may_act_on(bobs, true).ok, "whatever the server's touch rule says")
+	_check(bob_tool.may_act_on(bobs).ok, "but their own does")
+	_check(not damage.hurt(bobs.instance_id, 40.0, &"alice").ok and is_equal_approx(damage.health_of(bobs.instance_id), 100.0),
+		"and nothing else hurts them", "%.0f" % damage.health_of(bobs.instance_id))
+	_check(not damage.impact(bobs.instance_id, 50.0, &"alice") and bobs.is_alive(), "not even an impact that would break one")
+
+	spawner.set_protected(&"bob", false)
+	_check(tool.may_act_on(bobs).ok and damage.hurt(bobs.instance_id, 40.0, &"alice").ok, "turned off, they are fair game again")
+
+	spawner.set_protected(&"bob", true)
+	var _left := spawner.player_left(&"bob")
+	_check(not spawner.is_protected(&"bob"), "and leaving takes the protection with them")
+	_check(int(spawner.describe()["protected"]) == 0, "which describe() counts")
 
 	spawner.queue_free()
 	_done()

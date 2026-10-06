@@ -140,6 +140,9 @@ func hurt(instance_id: int, amount: float, by: StringName = &"") -> DotResult:
 			DotError.CODE_UNSUPPORTED, "That prop cannot be broken.", prop.def.name_or_id()
 		)
 
+	if not _spawner.may_act_for(prop, by):
+		return DotResult.fail(DotError.CODE_FORBIDDEN, "Its owner has protected it.", prop.def.name_or_id())
+
 	var remaining: float = maxf(float(_health[instance_id]) - amount, 0.0)
 	_health[instance_id] = remaining
 
@@ -170,6 +173,9 @@ func break_now(instance_id: int, by: StringName = &"") -> DotResult:
 			DotError.CODE_UNSUPPORTED, "That prop cannot be broken.", prop.def.name_or_id()
 		)
 
+	if not _spawner.may_act_for(prop, by):
+		return DotResult.fail(DotError.CODE_FORBIDDEN, "Its owner has protected it.", prop.def.name_or_id())
+
 	_break(prop, by)
 	return DotResult.success(0.0)
 
@@ -186,6 +192,9 @@ func impact(instance_id: int, speed: float, by: StringName = &"") -> bool:
 
 	var prop := _spawner.get_prop(instance_id)
 	if prop == null or not prop.is_alive() or prop.def == null:
+		return false
+
+	if not _spawner.may_act_for(prop, by):
 		return false
 
 	var threshold := prop.def.break_impact_speed

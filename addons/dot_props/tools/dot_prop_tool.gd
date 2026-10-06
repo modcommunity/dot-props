@@ -85,6 +85,11 @@ func may_act_on(prop: DotPropInstance, can_touch_others: bool = true) -> DotResu
 			DotError.CODE_STATE, "Somebody else is holding that."
 		)
 
+	if spawner != null and not spawner.may_act_for(prop, wielder):
+		return DotResult.fail(
+			DotError.CODE_FORBIDDEN, "Its owner has protected it."
+		)
+
 	if not can_touch_others and prop.owner_id != wielder:
 		return DotResult.fail(
 			DotError.CODE_FORBIDDEN, "That is not yours."
