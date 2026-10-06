@@ -40,6 +40,20 @@ enum Size {
 ## Menu grouping: [code]"props/furniture"[/code], [code]"vehicles"[/code].
 @export var category: StringName = &"props"
 
+## Which per-player limit this counts against: `props`, `npcs`, `vehicles`, `balloons` —
+## any name a game's [member DotPropLimits.group_limits] uses. Empty is [constant GROUP_PROPS].
+##
+## [b]A count, beside the cost budget, and not instead of it.[/b] The budget asks "how much
+## of the server's simulation is yours"; a group limit asks "how many of THESE may you
+## have", which is the question a sandbox actually gets asked — a player with sixty
+## crates is building, a player with sixty NPCs is a problem — and one budget cannot ask
+## both, because the answer to the first is in cost and the second in things.
+##
+## Separate from [member category], which is where the menu files it: a category is how a
+## player finds a thing, a group is what an operator limits, and a "Combine soldier" filed
+## under a game's own category is still an NPC.
+@export var limit_group: StringName = &""
+
 ## An icon path for a spawn menu. Not loaded by anything here.
 @export var icon_path: String = ""
 
@@ -144,6 +158,15 @@ enum Size {
 @export var meta: Dictionary = {}
 
 
+## The limit group a definition with no [member limit_group] counts against.
+const GROUP_PROPS := &"props"
+
+
+## [member limit_group], or [constant GROUP_PROPS].
+func group() -> StringName:
+	return limit_group if limit_group != &"" else GROUP_PROPS
+
+
 static func make(p_id: StringName, p_scene: String) -> DotPropDef:
 	var prop := DotPropDef.new()
 	prop.id = p_id
@@ -198,6 +221,8 @@ func to_dictionary() -> Dictionary:
 		out["icon"] = icon_path
 	if content_id != &"":
 		out["content"] = String(content_id)
+	if limit_group != &"":
+		out["limit_group"] = String(limit_group)
 	if not can_grab:
 		out["can_grab"] = false
 	if not can_freeze:
@@ -235,6 +260,7 @@ static func from_dictionary(data: Dictionary) -> DotPropDef:
 	prop.category = StringName(str(data.get("category", "props")))
 	prop.icon_path = str(data.get("icon", ""))
 	prop.content_id = StringName(str(data.get("content", "")))
+	prop.limit_group = StringName(str(data.get("limit_group", "")))
 	prop.size = _to_size(data.get("size", Size.MEDIUM))
 	prop.mass = maxf(float(data.get("mass", 20.0)), 0.1)
 	prop.cost = clampi(int(data.get("cost", 1)), 1, 100)

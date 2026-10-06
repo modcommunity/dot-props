@@ -47,6 +47,17 @@ extends DotConfig
 ## map, without having to price it at a hundred.
 @export var max_size: DotPropDef.Size = DotPropDef.Size.HUGE
 
+## How many of each limit group one player may have at once, by group name — see
+## [member DotPropDef.limit_group]. A group not named here, or 0, is not limited by count.
+##
+## [codeblock]
+## {"props": 200, "npcs": 10, "vehicles": 4, "balloons": 30, "weapons": 20}
+## [/codeblock]
+##
+## A count beside [member per_player_budget], which is cost: both apply, so a player can
+## run out of either. A game that wants only one sets the other to 0.
+@export var group_limits: Dictionary = {}
+
 @export_group("Server")
 
 ## Most props in the world at once, from everybody. 0 = unlimited.
@@ -78,6 +89,11 @@ extends DotConfig
 @export_range(0.5, 100.0, 0.5) var hold_distance_max: float = 25.0
 
 @export_range(0.1, 20.0, 0.1) var hold_distance_min: float = 1.5
+
+
+## The per-player count limit for [param group], or 0 for none.
+func group_limit(group: StringName) -> int:
+	return maxi(int(group_limits.get(group, group_limits.get(String(group), 0))), 0)
 
 
 func env_prefix() -> String:

@@ -316,6 +316,77 @@ func _adopt(def: DotPropDef, body: Node, player_id: StringName) -> DotPropInstan
 	return instance
 
 
+## The limit a particular player has for [param key], where the game wants to decide.
+##
+## `func(player_id: StringName, key: StringName, base: int) -> int`. [param key] is
+## [constant LIMIT_BUDGET], [constant LIMIT_FROZEN], or a limit group's name; [param base]
+## is what [member limits] says; the answer replaces it for that player, 0 meaning "no
+## limit". Unset, every player has [member limits].
+##
+## [b]A callable, because who someone is is not this addon's business.[/b] A sandbox gives
+## its admins four times the NPCs and its supporters twice the props, and every server
+## names those roles differently and keeps them somewhere different — an admin file, a
+## site's groups, a Discord bot. The spawner asks; the game answers.
+var limit_resolver: Callable = Callable()
+
+const LIMIT_BUDGET := &"budget"
+const LIMIT_FROZEN := &"frozen"
+
+
+## [param player_id]'s limit for [param key], through [member limit_resolver].
+func limit_for(player_id: StringName, key: StringName) -> int:
+	var base := 0
+
+	if limits != null:
+		match key:
+			LIMIT_BUDGET:
+				base = limits.per_player_budget
+			LIMIT_FROZEN:
+				base = limits.per_player_frozen
+			_:
+				base = limits.group_limit(key)
+
+	if limit_resolver.is_valid():
+		return maxi(int(limit_resolver.call(player_id, key, base)), 0)
+
+	return base
+
+
+## How many props of limit group [param group] [param player_id] has.
+func group_count(player_id: StringName, group: StringName) -> int:
+	var total := 0
+
+	for prop in props_of(player_id):
+		if prop.def != null and prop.def.group() == group:
+			total += 1
+
+	return total
+
+
+## Every group [param player_id] has something in, or a limit for, as
+## `{group: [count, limit]}`. What a HUD or a `limits` command shows.
+func group_usage(player_id: StringName) -> Dictionary:
+	var out := {}
+
+	if limits != null:
+		for group in limits.group_limits.keys():
+			var name := StringName(str(group))
+			out[name] = [0, limit_for(player_id, name)]
+
+	for prop in props_of(player_id):
+		if prop.def == null:
+			continue
+
+		var name := prop.def.group()
+
+		if not out.has(name):
+			out[name] = [0, limit_for(player_id, name)]
+
+		(out[name] as Array)[0] = int((out[name] as Array)[0]) + 1
+
+	return out
+
+
 ## Whether a player may spawn one of these right now.
 func may_spawn(def: DotPropDef, player_id: StringName) -> DotResult:
 	if limits == null:
@@ -348,14 +419,32 @@ func may_spawn(def: DotPropDef, player_id: StringName) -> DotResult:
 			"%d of %d" % [world_cost(), limits.world_budget]
 		)
 
-	if limits.per_player_budget > 0:
+	var budget := limit_for(player_id, LIMIT_BUDGET)
+
+	if budget > 0:
 		var mine := player_cost(player_id)
 
-		if mine + def.cost > limits.per_player_budget:
+		if mine + def.cost > budget:
 			return DotResult.fail(
 				DotError.CODE_QUOTA,
 				"You are at your prop limit.",
-				"%d of %d" % [mine, limits.per_player_budget]
+				"%d of %d" % [mine, budget]
+			)
+
+	var group := def.group()
+	var cap := limit_for(player_id, group)
+
+	if cap > 0:
+		var have := group_count(player_id, group)
+
+		if have >= cap:
+			# Named, because "you are at your limit" with a budget left over reads as the
+			# server being wrong; "you have 10 of 10 npcs" says which limit and how to get
+			# under it.
+			return DotResult.fail(
+				DotError.CODE_QUOTA,
+				"You have reached your %s limit (%d)." % [String(group), cap],
+				"%d of %d %s" % [have, cap, String(group)]
 			)
 
 	return DotResult.success(null)
@@ -368,16 +457,18 @@ func may_spawn(def: DotPropDef, player_id: StringName) -> DotResult:
 ## over what they actually own, not tracked as a running total, because a running
 ## total drifts the moment a prop is removed by anything that did not decrement it.
 func may_freeze(player_id: StringName) -> DotResult:
-	if limits == null or limits.per_player_frozen <= 0:
+	var cap := limit_for(player_id, LIMIT_FROZEN)
+
+	if cap <= 0:
 		return DotResult.success(null)
 
 	var frozen := frozen_count(player_id)
 
-	if frozen >= limits.per_player_frozen:
+	if frozen >= cap:
 		return DotResult.fail(
 			DotError.CODE_QUOTA,
 			"You have frozen as many props as this server allows.",
-			"%d of %d" % [frozen, limits.per_player_frozen]
+			"%d of %d" % [frozen, cap]
 		)
 
 	return DotResult.success(null)

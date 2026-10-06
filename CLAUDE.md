@@ -120,6 +120,12 @@ does not.
 run — still **disowns** the departed player's props. Without that, the budget of
 somebody who left is held against them for ever.
 
+## Counts per kind, and a player's own limits
+
+Beside the cost budget, every definition has a `limit_group` (empty is `props`) and `DotPropLimits.group_limits` caps how many of each group one player may have — a count, not a cost, because "how much of the simulation is yours" and "how many NPCs do you have" are different questions and one budget cannot ask both. A refusal names the group ("You have reached your npcs limit (10)."), because "you are at your limit" with a budget left over reads as the server being wrong.
+
+`DotPropSpawner.limit_resolver` is `func(player_id, key, base) -> int`, asked for `budget`, `frozen` and every group: the game decides who gets more. Who a player is — an admin, a supporter, somebody in a site group — is not this addon's business, and every server keeps it somewhere different. `limit_for`, `group_count` and `group_usage` are what a HUD or a `limits` command reads. game-playground is the consumer: `pg_max_<group>` and per-role overrides.
+
 ## Ownership and undo are two different lists
 
 They were one list in the first version, and the self-test caught what that costs.

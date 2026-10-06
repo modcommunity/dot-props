@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 169
+const CHECKS := 179
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 24
+const SECTIONS := 25
 
 var _passed := 0
 var _failed := 0
@@ -48,6 +48,7 @@ func _run() -> void:
 	_test_spawning_2d()
 	_test_authority()
 	_test_budget()
+	_test_group_limits()
 	_test_cooldown()
 	_test_world_budget()
 	_test_undo()
@@ -425,6 +426,53 @@ func _test_budget() -> void:
 
 	spawner.queue_free()
 	costly.queue_free()
+	_done()
+
+
+func _test_group_limits() -> void:
+	_section("limits per group, and per player")
+
+	var limits := DotPropLimits.new()
+	limits.per_player_budget = 0
+	limits.spawn_interval = 0.0
+	limits.world_budget = 0
+	limits.group_limits = {&"crates": 2}
+
+	var spawner := _spawner(limits)
+	spawner.catalogue.get_prop(&"crate").limit_group = &"crates"
+
+	_check(spawner.spawn(&"crate", &"alice", Vector3.ZERO) != null
+		and spawner.spawn(&"crate", &"alice", Vector3.ZERO) != null, "two of a group of two fit")
+
+	var reasons: Array = []
+	spawner.refused.connect(func(_p: StringName, _id: StringName, why: String) -> void: reasons.append(why))
+	_check(spawner.spawn(&"crate", &"alice", Vector3.ZERO) == null, "and the third is refused")
+	_check(not reasons.is_empty() and str(reasons[-1]).contains("crates"),
+		"saying which limit", str(reasons))
+	_check(spawner.spawn(&"safe", &"alice", Vector3.ZERO) != null,
+		"while a prop in another group is not counted against it")
+	_check(spawner.group_count(&"alice", &"crates") == 2 and spawner.group_count(&"alice", &"props") == 1,
+		"each group is counted on its own")
+
+	# A role: the game answers per player. Bob is an admin with ten.
+	spawner.limit_resolver = func(player: StringName, key: StringName, base: int) -> int:
+		return 10 if player == &"bob" and key == &"crates" else base
+	for i in 5:
+		spawner.spawn(&"crate", &"bob", Vector3.ZERO)
+	_check(spawner.group_count(&"bob", &"crates") == 5, "an override lets one player past the default")
+	_check(spawner.spawn(&"crate", &"alice", Vector3.ZERO) == null, "and nobody else")
+
+	var usage := spawner.group_usage(&"bob")
+	_check(usage.has(&"crates") and int(usage[&"crates"][0]) == 5 and int(usage[&"crates"][1]) == 10,
+		"usage reports count and limit per group", str(usage))
+
+	var round_trip := DotPropDef.from_dictionary(spawner.catalogue.get_prop(&"crate").to_dictionary())
+	_check(round_trip.limit_group == &"crates", "a definition's group survives a document")
+	_check(DotPropDef.make(&"x", "res://x.tscn").group() == DotPropDef.GROUP_PROPS,
+		"and one with none is a prop")
+
+	spawner.catalogue.get_prop(&"crate").limit_group = &""
+	spawner.queue_free()
 	_done()
 
 
