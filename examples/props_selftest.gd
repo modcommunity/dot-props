@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 188
+const CHECKS := 200
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 26
+const SECTIONS := 27
 
 var _passed := 0
 var _failed := 0
@@ -56,6 +56,7 @@ func _run() -> void:
 	_test_no_leaked_nodes()
 	_test_tool_permissions()
 	_test_protected_owners()
+	_test_wiring()
 	_test_freezing()
 	_test_freeze_limit()
 	_test_size_ceiling()
@@ -722,6 +723,74 @@ func _test_protected_owners() -> void:
 	var _left := spawner.player_left(&"bob")
 	_check(not spawner.is_protected(&"bob"), "and leaving takes the protection with them")
 	_check(int(spawner.describe()["protected"]) == 0, "which describe() counts")
+
+	spawner.queue_free()
+	_done()
+
+
+## Props wired to props: a button's output to a door's input, delivered, cleared with either end.
+func _test_wiring() -> void:
+	_section("props wired to props")
+
+	var spawner := _spawner()
+	spawner.limits.spawn_interval = 0.0
+	var catalogue := spawner.catalogue
+	var button_def := DotPropDef.make(&"button", "res://fixtures/prop_body.tscn")
+	button_def.meta = {"outputs": ["pressed"]}
+	catalogue.add(button_def)
+	var door_def := DotPropDef.make(&"door", "res://fixtures/prop_body.tscn")
+	door_def.meta = {"inputs": ["open", "close", "toggle"], "outputs": ["opened"]}
+	catalogue.add(door_def)
+
+	var io := DotPropIO.new()
+	spawner.add_child(io)
+
+	var button := spawner.spawn(&"button", &"alice", Vector3(0.0, 1.0, 0.0))
+	var door := spawner.spawn(&"door", &"alice", Vector3(3.0, 1.0, 0.0))
+	var crate := spawner.spawn(&"crate", &"alice", Vector3(6.0, 1.0, 0.0))
+
+	_check(DotPropIO.outputs_of(button.def) == PackedStringArray(["pressed"]) and DotPropIO.inputs_of(door.def).has("toggle"),
+		"a prop declares what it says and hears in its meta")
+	_check(io.link(button.instance_id, &"pressed", door.instance_id, &"toggle").ok, "a button is wired to a door")
+	_check(not io.link(button.instance_id, &"pressed", door.instance_id, &"toggle").ok, "but not twice the same way")
+	_check(not io.link(button.instance_id, &"shouted", door.instance_id, &"toggle").ok, "nor from an output it does not have")
+	_check(not io.link(button.instance_id, &"pressed", crate.instance_id, &"toggle").ok, "nor to a prop with no such input")
+	_check(not io.link(door.instance_id, &"opened", door.instance_id, &"open").ok, "nor to itself")
+
+	var heard: Array = []
+	io.input_received.connect(func(target: DotPropInstance, input: StringName, value: Variant, source: DotPropInstance) -> void:
+		heard.append([target.instance_id, input, value, source.instance_id if source != null else 0]))
+	_check(io.fire(button.instance_id, &"pressed", true) == 1 and heard.size() == 1
+		and heard[0] == [door.instance_id, &"toggle", true, button.instance_id], "firing the output reaches the door's input", str(heard))
+
+	# A loop: the door's "opened" wired back to... another door's toggle, whose "opened" fires back.
+	var other := spawner.spawn(&"door", &"alice", Vector3(9.0, 1.0, 0.0))
+	var _a := io.link(door.instance_id, &"opened", other.instance_id, &"toggle")
+	var _b := io.link(other.instance_id, &"opened", door.instance_id, &"toggle")
+	var bounce := func(target: DotPropInstance, input: StringName, _v: Variant, _s: DotPropInstance) -> void:
+		if input == &"toggle" and target.def.id == &"door":
+			var _n := io.fire(target.instance_id, &"opened")
+	io.input_received.connect(bounce)
+	heard.clear()
+	var _loop := io.fire(door.instance_id, &"opened")
+	_check(io.refused_depth > 0 and heard.size() <= io.max_depth + 1, "a wired loop stops at the depth limit", "%d deliveries" % heard.size())
+	io.input_received.disconnect(bounce)
+
+	spawner.remove(door.instance_id)
+	_check(io.links_from(button.instance_id).is_empty() and io.link_count(other.instance_id) == 0,
+		"removing a prop takes every wire touching it")
+
+	io.max_links_per_prop = 1
+	var lamp := spawner.spawn(&"door", &"alice", Vector3(12.0, 1.0, 0.0))
+	_check(io.link(button.instance_id, &"pressed", other.instance_id, &"open").ok
+		and not io.link(button.instance_id, &"pressed", lamp.instance_id, &"open").ok, "and a prop has at most max_links_per_prop wires")
+
+	var mirror := DotPropIO.new()
+	mirror.authoritative = false
+	spawner.add_child(mirror)
+	_check(not mirror.link(button.instance_id, &"pressed", lamp.instance_id, &"open").ok and mirror.fire(button.instance_id, &"pressed") == 0,
+		"a client's copy wires and fires nothing")
+	_check(io.describe()["links"] == 1 and io.describe_lines().size() == 2, "describe says what is wired")
 
 	spawner.queue_free()
 	_done()

@@ -40,6 +40,7 @@ addons/dot_props/
     dot_prop_spawner.gd   spawns, tracks, limits, removes. The node a game adds
     dot_prop_damage.gd    hit points, impacts, and the blast a broken prop describes
     dot_prop_carry.gd     standing on a prop: riding it, and pressing down on it
+    dot_prop_io.gd        props wired to props: outputs, inputs, a link table, firing
   tools/
     dot_prop_tool.gd      reach, targeting, and what a tool may act on
     dot_phys_gun.gd       hold, move, rotate, freeze. A building tool
@@ -142,6 +143,10 @@ prop disappears, and it does not mean it stops being yours.
 ## Protected owners (2026-10-06)
 
 `DotPropSpawner.set_protected(player_id, on)` makes an owner's props untouchable by anybody else: `DotPropTool.may_act_on` refuses every other wielder (before, and regardless of, the server's touch-others rule), and `DotPropDamage.hurt`, `break_now` and `impact` refuse any `by` that is not the owner, including none. It is what a building server calls creative mode, and it lives here rather than in a game because every tool and every source of harm already asks the spawner: a game keeping its own set would have to remember it at every call, and the first one it forgot would be the way round it. `player_left` drops the protection. `props_selftest`'s *a protected owner's props*.
+
+## Props wired to props (2026-10-06)
+
+`DotPropIO` is a link table beside the spawner: a prop declares what it says and hears in its definition's meta (`"outputs": ["pressed"]`, `"inputs": ["open", "close", "toggle"]`), `link(from, output, to, input)` wires one to the other, and `fire(from, output, value)` delivers to every wired input as `input_received`. **It knows nothing about doors.** What "toggle" does to a door and what presses a button are the game's, so a swinging door and a sliding one are the same link and a game's "use" key is its own. Wires are refused to a prop that does not declare the name, to itself, twice the same way, and past `max_links_per_prop` (16); a removal takes every wire touching the prop (a link to something gone is a button that silently does nothing); a chain deeper than `max_depth` (8) — a door wired back to whatever opened it — stops once, with a warning. Server-authoritative and not replicated: a client learns what a door did from the door. Asked for by Christian so other games can wire things too; game-playground's buttons, levers and doors are the first user. `props_selftest`'s *props wired to props* (12, the total armed by being declared wrong once).
 
 ## `is_alive()` is not "the node is valid"
 
