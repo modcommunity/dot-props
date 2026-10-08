@@ -11,36 +11,36 @@ This asset, along with all the others, was built initially with **Claude Code** 
 
 I intend on reviewing code, testing, and editing documentation regularly. If you're interested in helping out, please let me know!
 
-## A Sandbox Layer
-**A sandbox layer for Godot 4.** Spawnable props, the limits that keep a server alive, and the tools that move them.
+## What it does
+It lets players spawn props (crates, furniture, anything with a physics body) and move them around with tools: a **physics gun** that holds, rotates and freezes a prop, and a **gravity gun** that pulls, carries and punts one. The props come from a catalogue an operator can edit as JSON.
 
-A physics gun that holds, rotates and freezes; a gravity gun that pulls, carries and punts; a catalogue an operator edits as JSON; per-player budgets, a spawn cooldown, an undo stack, and cleanup when somebody leaves.
+Most of the work is in the limits, because a sandbox server without them falls over quickly. Each player has a budget, a short wait between spawns, a limit on frozen props and an undo list, the whole server has a cap, and a player's props are removed when they leave.
 
-## Server-authoritative, and not predicted
+It can also make props breakable (with health, and an optional explosion), let players stand on props and be carried by them, and wire props together, such as a button that opens a door.
 
-Rigid-body physics is not reproducible across machines, because the solver's iteration order and the last bits of every float differ, so a predicted prop is a prop that is corrected constantly. The server owns every prop; the client draws what it is told; the tools send intent.
+The server owns every prop, and clients only draw what it sends. Physics simulation does not come out exactly the same on two machines, so a prop predicted on the client would be corrected all the time.
 
-## Installing
+## Getting started
+You need [Godot 4.7](https://godotengine.org/download). The easiest way to get this addon and the ones it needs is [dot-bootstrap](https://github.com/modcommunity/dot-bootstrap), which clones every project and links the addons into each one.
 
-Copy `addons/dot_props/` and [`dot-core`](https://github.com/modcommunity/dot-core)'s `addons/dot_core/` into your project, and enable dot-props in *Project → Project Settings → Plugins*.
+To add it to your own project by hand, copy `addons/dot_props/` and [dot-core](https://github.com/modcommunity/dot-core)'s `addons/dot_core/` into it and enable dot-props in **Project → Project Settings → Plugins**. dot-core is the only dependency.
 
-## Five minutes
+## Using it
 
 ```gdscript
 var spawner := DotPropSpawner.new()
-spawner.authoritative = true                  # on the server only
+spawner.authoritative = true                  # on the server only. Otherwise every spawn is refused
 spawner.catalogue = DotPropCatalogue.load_json("res://props.json").value
 spawner.limits = DotPropLimits.new()
-spawner.world_ref = DotNodeRef.of_path(^"../World")
+spawner.world_ref = DotNodeRef.of_path(^"../World")   # where props are added, relative to the spawner
 add_child(spawner)
 
 spawner.refused.connect(func(player, prop, reason): tell(player, reason))
 
-# once per simulated tick
-spawner.advance(delta)
-
-# when a player spawns something
+spawner.advance(delta)                                 # every tick, in seconds
 spawner.spawn(&"crate", player_id, aim_point, Basis.IDENTITY)
+spawner.undo(player_id)
+spawner.player_left(player_id)                         # removes their props
 ```
 
 `props.json`:
@@ -49,30 +49,28 @@ spawner.spawn(&"crate", player_id, aim_point, Basis.IDENTITY)
 {
   "format": 1,
   "props": [
-    {"id": "crate", "name": "Crate", "category": "props", "scene": "res://props/crate.tscn", "mass": 20},
+    {"id": "crate", "name": "Crate", "category": "props", "scene": "res://props/crate.tscn", "mass": 20, "max_health": 50},
     {"id": "safe", "name": "Safe", "category": "props", "scene": "res://props/safe.tscn", "mass": 900, "cost": 8},
     {"id": "pillar", "category": "scenery", "scene": "res://props/pillar.tscn", "can_grab": false}
   ]
 }
 ```
 
-## The tools
+A prop's scene is a `RigidBody3D` with no script. Other fields: `size` (a prop larger than the server's `max_size` is refused), `limit_group` (counted against `group_limits`), `can_freeze`, `rideable`, `break_impact_speed`, `explode_radius` / `explode_damage` / `explode_force`, `entitlement` and `permission` (who may spawn it), and `meta` for your own data.
+
+### The tools
 
 ```gdscript
 var gun := DotPhysGun.new()
 gun.spawner = spawner
 gun.wielder = player_id
 
-# on the grab button
-gun.grab(space_state, eye_position, aim_direction, view_basis)
-
-# every physics tick while held
-gun.hold(eye_position, aim_direction, view_basis, delta)
-gun.push(scroll_amount, delta)
-
-# on release, or to freeze it where it is
+gun.grab(space_state, eye_position, aim_direction, view_basis)   # on the grab button
+gun.hold(eye_position, aim_direction, view_basis, delta)         # every tick while held
+gun.push(scroll_amount, delta)                                   # nearer or further
+gun.rotate_held(yaw_degrees, pitch_degrees)
 gun.release()
-gun.freeze_held()
+gun.freeze_held()                                                # leave it frozen in place
 ```
 
 ```gdscript
@@ -81,21 +79,79 @@ grav.spawner = spawner
 grav.wielder = player_id
 
 grav.pull(space_state, eye_position, aim_direction)
-grav.carry(eye_position, aim_direction, delta)     # every physics tick
+grav.carry(eye_position, aim_direction, delta)                   # every tick while carrying
 grav.punt(space_state, eye_position, aim_direction)
+grav.drop()
 ```
 
-## Documentation
+Anybody can move anybody's props by default. `set_protected(player_id, true)` stops other players touching that player's props, and nobody can grab a prop somebody else is already holding.
 
-[`CLAUDE.md`](CLAUDE.md) has the design reasoning: why props are not predicted, why a physics gun holds with a spring rather than a transform, what each limit is defending against, and the budget bypass the self-test found.
+### Breakable props
 
-## Validating
+```gdscript
+var damage := DotPropDamage.new()
+damage.spawner_ref = DotNodeRef.of_path(^"../Props")
+damage.authoritative = true                   # on the server. Otherwise hurt() refuses
+add_child(damage)
+
+damage.hurt(prop.instance_id, 25.0, attacker_id)
+damage.impact(prop.instance_id, closing_speed, driver_id)   # from a collision
+damage.broken.connect(func(prop, at, by): play_break_effect(at))
+```
+
+A prop with `max_health` 0 (the default) cannot be broken. When a prop with an explosion breaks, the addon pushes the other props nearby and fires `exploded` with the radius, damage and force. Hurting players and pushing anything that is not a prop is up to your game.
+
+### Standing on props
+A character controller treats a prop like the floor, so a crate never sinks, tips or moves a player standing on it. `DotPropCarry` fixes that. Call `ride()` once per tick for each player on the ground: it applies their weight to the prop under them and returns how far the prop moved them this tick. `push()` shoves a prop a player walks into.
+
+### Wiring props together
+A prop lists what it can send and receive in its `meta`, for example `{"outputs": ["pressed"]}` on a button and `{"inputs": ["open", "close"]}` on a door.
+
+```gdscript
+var io := DotPropIO.new()
+io.spawner_ref = DotNodeRef.of_path(^"../Props")
+add_child(io)
+
+io.link(button.instance_id, &"pressed", door.instance_id, &"open")
+io.fire(button.instance_id, &"pressed")       # when somebody presses it
+io.input_received.connect(func(target, input, value, source): open_door(target))
+```
+
+What "open" means for a door is up to your game.
+
+## Settings
+The limits live in a `DotPropLimits` resource. Like every Dot config it is layered: inspector defaults, then a JSON file, then the environment, then the command line. Call `load_layered()` on it before giving it to the spawner:
+
+```gdscript
+var limits := DotPropLimits.new()
+limits.load_layered("user://props.json")
+spawner.limits = limits
+```
+
+```bash
+DOT_PROPS_PER_PLAYER_BUDGET=100 godot --headless -- --props-world-budget=2048
+```
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `per_player_budget` | 64 | Most props one player may have, counted by `cost`. 0 is unlimited |
+| `spawn_interval` | 0.15 | Seconds between one player's spawns |
+| `per_player_frozen` | 128 | Most props one player may freeze. 0 is unlimited |
+| `max_size` | `HUGE` | The largest size class that may be spawned |
+| `group_limits` | none | Per-player counts by `limit_group`, such as `{"vehicles": 4}` |
+| `world_budget` | 1024 | Most props on the server, from everybody. 0 is unlimited |
+| `clean_up_on_leave` | true | Remove a player's props when they leave |
+| `undo_depth` | 64 | How many spawns a player can undo |
+| `grab_range` | 40 | How far the physics gun reaches, in metres |
+| `grab_mass_limit` | 0 | Heaviest prop it can hold, in kilograms. 0 is any |
+| `hold_distance_min` / `hold_distance_max` | 1.5 / 25 | How near and far a held prop can be |
+
+## Testing
 
 ```bash
 godot --headless --path . --import
-godot --headless --path . res://examples/props_selftest.tscn   # 102 checks
+godot --headless --path . res://examples/props_selftest.tscn
 ```
 
-## Licence
-
+## License
 MIT. See [LICENSE](LICENSE).
