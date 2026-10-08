@@ -274,7 +274,7 @@ Three bugs it found, none of which errored — and a fourth found by game-playgr
 | Telling the player why a spawn failed | `DotPropSpawner.refused` |
 | Doing something to everything in the world | `DotPropSpawner.all_props`, which hands out a copy |
 | A prop that has code behind it | `DotPropDef.meta`, read on `spawned`. See game-playground's entities |
-| A prop in a 2D world | `DotPropSpawner.spawn_2d`. See game-simple-lobby and game-hungario |
+| A prop in a 2D world | `DotPropSpawner.spawn_2d`. See game-hungario |
 
 ## Things deliberately not here
 
