@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 200
+const CHECKS := 234
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 27
+const SECTIONS := 29
 
 var _passed := 0
 var _failed := 0
@@ -69,6 +69,8 @@ func _run() -> void:
 	await _test_explosion()
 	_test_carry()
 	await _test_carry_pushes()
+	_test_disguise()
+	_test_taunts()
 
 	print("")
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -1489,4 +1491,117 @@ func _test_carry_pushes() -> void:
 		"a prop that is not rideable is not pushable either")
 	_check(not carry.push(999999, Vector3.ZERO, Vector3.RIGHT),
 		"and an id that is not a prop at all is refused")
+	_done()
+
+
+# --- Hiding as a prop -------------------------------------------------------
+
+func _test_disguise() -> void:
+	_section("hiding as a prop: what a player may become, and what it costs them")
+
+	var rules := DotPropDisguiseRules.new()
+	_check(rules.validate().ok, "the default rules are usable")
+
+	var cabinet := Vector3(0.7, 1.4, 0.5)
+	var bottle := Vector3(0.12, 0.3, 0.12)
+	var hc := DotPropDisguise.health(cabinet, rules)
+	var hb := DotPropDisguise.health(bottle, rules)
+	_check(hc > 100.0 and hc <= rules.max_health, "a cabinet is worth a lot of hits (%.0f)" % hc)
+	_check(hb < 30.0 and hb >= rules.min_health, "a bottle very few (%.0f)" % hb)
+	var ratio := hc / hb
+	# 0.49 m³ against 0.0043 m³ is over a hundred times the volume; the health must not follow it.
+	_check(ratio > 4.0 and ratio < 20.0, "and the cabinet is worth several bottles, not a hundred (%.1fx)" % ratio)
+
+	_check(not DotPropDisguise.may_take(Vector3(0.05, 0.3, 0.05), rules).ok, "a pencil is too small to hide as")
+	_check(not DotPropDisguise.may_take(Vector3(3, 3, 3), rules).ok, "a shed is too big")
+	_check(DotPropDisguise.may_take(cabinet, rules).ok, "a cabinet is fine")
+
+	var sofa := Vector3(2.1, 0.9, 0.95)
+	var hull := DotPropDisguise.hull(sofa, rules)
+	_check(is_equal_approx(hull.x, 0.475), "a sofa's hull is half its NARROWER footprint, so it fits the door it came in by (r %.3f)" % hull.x)
+	_check(is_equal_approx(hull.y, 0.95), "and a capsule is never shorter than it is wide (h %.2f for a 0.9 m sofa)" % hull.y)
+	var tiny := DotPropDisguise.hull(bottle, rules)
+	_check(is_equal_approx(tiny.x, rules.hull_min_radius) and is_equal_approx(tiny.y, rules.hull_min_height),
+		"a bottle gets the smallest hull the rules allow (r %.2f, h %.2f)" % [tiny.x, tiny.y])
+
+	_check(is_equal_approx(DotPropDisguise.health_after(50.0, 100.0, 140.0, rules), 70.0),
+		"changing disguise keeps the fraction of health, not the new prop's full health")
+	rules.keep_health_fraction = false
+	_check(is_equal_approx(DotPropDisguise.health_after(50.0, 100.0, 140.0, rules), 140.0),
+		"unless the server says a new prop is a fresh one")
+	rules.keep_health_fraction = true
+
+	_check(DotPropDisguise.within_reach(Vector3.ZERO, Vector3(0, 0, -2.9), rules)
+		and not DotPropDisguise.within_reach(Vector3.ZERO, Vector3(0, 0, -3.2), rules),
+		"a prop is copied from within reach and not past it")
+
+	var d := DotPropDisguise.of(&"cabinet", cabinet)
+	_check(d.is_disguised() and not DotPropDisguise.new().is_disguised(), "an empty id is your own body")
+	_check(d.tilt(2, true, rules) and is_equal_approx(d.pitch, 30.0), "a tilt turns by the rules' step")
+	for i in range(10):
+		var _t := d.tilt(1, true, rules)
+	_check(is_equal_approx(d.pitch, rules.max_tilt), "and stops at the rules' limit")
+	d.straighten()
+	_check(is_equal_approx(d.pitch, 0.0) and is_equal_approx(d.roll, 0.0), "and comes upright again")
+
+	d.set_locked(true, 120.0)
+	var turned := d.hit_basis(10.0)
+	_check(turned.is_equal_approx(Basis(Vector3.UP, deg_to_rad(120.0))),
+		"locked, it keeps the facing it was locked at whatever the player looks at")
+	d.set_locked(false, 0.0)
+	_check(d.hit_basis(10.0).is_equal_approx(Basis(Vector3.UP, deg_to_rad(10.0))),
+		"unlocked, it turns with the player's view")
+
+	d.roll = 15.0
+	var back := DotPropDisguise.from_wire(d.to_wire())
+	_check(back.prop_id == &"cabinet" and back.size.is_equal_approx(cabinet) and is_equal_approx(back.roll, 15.0)
+		and back.locked == d.locked, "a disguise survives the wire")
+
+	var bad := DotPropDisguiseRules.new()
+	bad.hull_min_height = 0.1
+	_check(not bad.validate().ok, "rules whose smallest hull would be a capsule shorter than it is wide are refused")
+	_done()
+
+
+func _test_taunts() -> void:
+	_section("taunts: chosen, forced, and the meter between")
+
+	var t := DotPropTaunts.new()
+	t.auto_after = 10.0
+	t.auto_radius = 1.5
+	t.cooldown = 2.0
+	_check(not t.may_taunt(&"p", 0.0).ok, "a server with no taunts refuses one and says so")
+
+	var added := t.add_all([
+		{"id": "whistle", "title": "Whistle", "seconds": 1.5, "sound": "res://taunts/whistle.ogg"},
+		{"id": "honk", "title": "Honk", "seconds": 0.8},
+		{"title": "no id"},
+	])
+	_check(added == 2 and t.order.size() == 2, "a list adds every entry with an id (%d)" % added)
+
+	t.observe(&"p", Vector3.ZERO, 0.0)
+	t.observe(&"p", Vector3(1.0, 0, 0), 4.0)
+	_check(is_equal_approx(t.meter(&"p", 5.0), 0.5), "shuffling inside the radius is standing still (meter %.2f at 5 s)" % t.meter(&"p", 5.0))
+	_check(not t.due(&"p", 9.9) and t.due(&"p", 10.0), "a taunt is forced when the meter is full, and not a tick before")
+
+	t.observe(&"p", Vector3(3.0, 0, 0), 6.0)
+	_check(is_equal_approx(t.meter(&"p", 6.0), 0.0), "leaving the radius starts the clock again")
+
+	var chosen := t.taunt(&"p", 7.0, &"whistle")
+	_check(chosen.get("id") == &"whistle" and int(chosen["points"]) == t.points_voluntary and not chosen["forced"],
+		"a chosen taunt is paid (%d)" % int(chosen.get("points", -1)))
+	_check(not t.may_taunt(&"p", 9.0).ok, "and nobody taunts over their own taunt or inside the cooldown")
+	_check(t.may_taunt(&"p", 10.5).ok, "until it has played and the cooldown has passed (%.1f + %.1f s)" % [1.5, t.cooldown])
+	_check(is_equal_approx(t.still_for(&"p", 8.0), 1.0), "and choosing one starts the standing-still clock again")
+
+	var forced := t.taunt(&"q", 3.0, &"", true, 42)
+	_check(t.has(StringName(forced.get("id", ""))) and int(forced["points"]) == 0 and forced["forced"],
+		"a forced taunt picks one itself and pays nothing by default")
+	_check(t.taunt(&"q", 3.0, &"", true, 42).get("id") == forced.get("id"), "and the same seed picks the same one")
+
+	t.auto_after = 0.0
+	_check(is_equal_approx(t.meter(&"p", 999.0), 0.0) and not t.due(&"p", 999.0), "with the clock off nobody is ever forced")
+
+	t.reset()
+	_check(t.ready_in(&"p", 0.0) == 0.0, "a new round starts everybody's clock again")
 	_done()

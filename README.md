@@ -153,5 +153,22 @@ godot --headless --path . --import
 godot --headless --path . res://examples/props_selftest.tscn
 ```
 
+## Hiding as a prop
+
+For hide-and-seek games, `DotPropDisguise` holds what a player is disguised as and works out the collision capsule, the health and the hitbox turn from the prop's size, the same way on the server and every client. `DotPropTaunts` keeps the taunt list, the cooldown, the points, and the meter that forces a taunt on somebody who has stood still too long.
+
+```gdscript
+var rules := DotPropDisguiseRules.new()        # fill from your config
+var ok := DotPropDisguise.may_take(size, rules)
+var hull := DotPropDisguise.hull(size, rules)  # Vector2(radius, height)
+var hp := DotPropDisguise.health(size, rules)
+
+var taunts := DotPropTaunts.new()
+taunts.add_all(config_taunts)                  # [{"id", "title", "seconds", "sound"}]
+taunts.observe(player_key, position, now)      # every tick
+if taunts.due(player_key, now):
+    play(taunts.taunt(player_key, now, &"", true, tick))
+```
+
 ## License
 MIT. See [LICENSE](LICENSE).

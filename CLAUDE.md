@@ -41,6 +41,10 @@ addons/dot_props/
     dot_prop_damage.gd    hit points, impacts, and the blast a broken prop describes
     dot_prop_carry.gd     standing on a prop: riding it, and pressing down on it
     dot_prop_io.gd        props wired to props: outputs, inputs, a link table, firing
+  hunt/
+    dot_prop_disguise_rules.gd  what a server allows a player hiding as a prop
+    dot_prop_disguise.gd  a player hiding as a prop: id, size, turn; hull, health, the wire
+    dot_prop_taunts.gd    taunts chosen and forced, the standing-still meter, the points
   tools/
     dot_prop_tool.gd      reach, targeting, and what a tool may act on
     dot_phys_gun.gd       hold, move, rotate, freeze. A building tool
@@ -225,7 +229,7 @@ godot --headless --path . --import
 find . -name '*.gd' -not -path './.godot/*' | while read f; do
     godot --headless --path . --check-only --script "res://${f#./}"
 done
-godot --headless --path . res://examples/props_selftest.tscn   # 118 checks
+godot --headless --path . res://examples/props_selftest.tscn   # 234 checks, 29 sections
 ```
 
 The suite spawns **real** `RigidBody3D`s into a real tree, because a limit that
@@ -258,6 +262,14 @@ Three bugs it found, none of which errored — and a fourth found by game-playgr
   consumes it has run, and a `mass` assignment is not picked up by the server until
   the next step — so an impulse applied in between is divided by the **old** mass.
   The test reported a 900 kg prop flying twenty times further than a 20 kg one.
+
+## A player hiding as a prop (`hunt/`, 2026-10-09)
+
+The hide-and-seek games turn a player into a prop, and the arithmetic of that is the same in every one of them and has to be the same on both ends of a wire. `DotPropDisguise` is a value (an id, a size in metres, yaw, pitch, roll, locked) with the statics a game needs: `may_take` (too small, too big), `hull` (the capsule a motor sweeps: half the NARROWER footprint, clamped, never shorter than it is wide, so a sofa still fits through the door it came in by), `health` (`scale x volume^exponent`, clamped: a cabinet about nine bottles, not a hundred and fifty) and `health_after` (changing disguise keeps the fraction, or a hurt player heals by finding a bigger prop). The hitbox is the other half and IS the prop's box turned by `hit_basis`, because what a seeker shoots at is what they can see. Both ends compute the hull from the replicated size and never send it. `DotPropDisguiseRules` is the resource a game fills from its own config.
+
+`DotPropTaunts` is the noise a hidden player makes: a catalogue (`add_all` from JSON), a cooldown on top of the last taunt's length, points for a chosen one (and, if the server says so, a forced one), and the standing-still meter that forces one on somebody who has not left `auto_radius` of where they settled for `auto_after` seconds. A radius rather than a speed, because a player shuffling on one spot is standing still as far as being found goes. It plays nothing: where a sound comes from on every client is the game's replication. Simulated seconds are passed in, never a wall clock.
+
+**Neither is a node, and neither depends on anything but dot-core**, which is this addon's one rule. mg-prop-hunt is the first game. `props_selftest`'s last two sections.
 
 ## Where a game plugs in
 
