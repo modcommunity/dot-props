@@ -1,275 +1,59 @@
 # dot-props
 
-A sandbox layer: spawnable props, the limits that keep a server alive, and the tools
-that move them.
+A sandbox layer: spawnable props, the limits that keep a server alive, the tools that move them (a physics gun and a gravity gun), props that break and props a player can ride, props wired to props, and the arithmetic of a player hiding as a prop.
 
-Read the family-wide conventions in [`../../CLAUDE.md`](../../CLAUDE.md) first. This
-file is only what is specific to props.
+Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is specific to props. The reasoning is in [docs/](docs/README.md).
 
-**Only dot-core is a dependency.**
+**Only dot-core is a dependency.** Combat, netcode, the controller and collision layouts are reached through signals, callables and ids the host wires.
 
-## The one idea
+## Read before
 
-**Props are server-authoritative and are not predicted.**
-
-Everything else in this family is built so a client can predict it — movement,
-weapons, the timer — and props deliberately are not. Rigid-body simulation is not
-reproducible across machines: the solver's iteration order, the order bodies enter an
-island and the last bits of every float all differ between a server and a client, and
-two runs of the same stack of crates diverge within a second or two.
-
-A predicted prop is therefore a prop that is corrected constantly, which looks far
-worse than one that is simply interpolated a few tens of milliseconds behind. So the
-server owns every prop, the client draws what it is told, and the tools send *intent*
-and receive results — the same division `DotFpsCommand` makes, minus the prediction.
-
-This is also why `authoritative` is checked before anything else in every mutating
-method: a client holds a spawner so it can render and account for what the server
-tells it about, and if that copy could spawn, a modified client would fill the world.
+| Read | Before |
+| --- | --- |
+| [docs/README.md](docs/README.md) | the index |
+| [docs/spawning.md](docs/spawning.md) | the spawner, definitions, limits, groups, ownership, protection, `DotPropIO`, what is deliberately not here |
+| [docs/tools.md](docs/tools.md) | `DotPropTool`, `DotPhysGun`, `DotGravGun` |
+| [docs/damage-and-carry.md](docs/damage-and-carry.md) | `DotPropDamage`, `DotPropCarry`, any physics assertion |
+| [docs/hunt.md](docs/hunt.md) | `DotPropDisguise`, `DotPropTaunts` |
+| [docs/history.md](docs/history.md) | the bugs, and how each looked |
 
 ## Layout
 
-```
-addons/dot_props/
-  core/
-    dot_prop_def.gd       one spawnable: scene, size, mass, cost, entitlement
-    dot_prop_instance.gd  one prop in the world: node, owner, frozen, held-by
-    dot_prop_catalogue.gd every prop a server offers. The JSON an operator edits
-    dot_prop_limits.gd    what a player may spawn, as a layered DotConfig
-  runtime/
-    dot_prop_spawner.gd   spawns, tracks, limits, removes. The node a game adds
-    dot_prop_damage.gd    hit points, impacts, and the blast a broken prop describes
-    dot_prop_carry.gd     standing on a prop: riding it, and pressing down on it
-    dot_prop_io.gd        props wired to props: outputs, inputs, a link table, firing
-  hunt/
-    dot_prop_disguise_rules.gd  what a server allows a player hiding as a prop
-    dot_prop_disguise.gd  a player hiding as a prop: id, size, turn; hull, health, the wire
-    dot_prop_taunts.gd    taunts chosen and forced, the standing-still meter, the points
-  tools/
-    dot_prop_tool.gd      reach, targeting, and what a tool may act on
-    dot_phys_gun.gd       hold, move, rotate, freeze. A building tool
-    dot_grav_gun.gd       pull, carry, punt. A weapon and a toy
-```
-
-## A prop is not always a 3D one
-
-`DotPropSpawner.spawn` places a `Node3D` and `spawn_2d` places a `Node2D`, and
-everything either side of that placement is the same code: the catalogue, the
-entitlement check, the budget, the interval, the undo stack, the ownership and the
-removal. None of those is about dimension — they are about **who put what in the world
-and what it cost** — and a 2D game that had to re-implement them would be
-re-implementing the whole addon to avoid one `Vector3`.
-
-**Two entry points rather than one widened signature.** Fourteen repositories call
-`spawn(id, player, Vector3)`; changing that is a breaking change across all of them for
-the benefit of the games that are 2D. A `Vector2` and a rotation in radians is also
-what a 2D caller actually holds, and handing it a `Basis` to be thrown away is the sort
-of lie that becomes "why does this crate have a pitch".
-
-`DotPropInstance.node` is therefore typed **`Node`**, not `Node3D`. `body()` /
-`position()` still answer for a 3D prop, `body_2d()` / `position_2d()` are their
-counterparts, and `is_2d()` is the question — asked rather than inferred, because a
-`DotPropDef` deliberately says nothing about dimension and a catalogue holding both is
-a legitimate thing for a game with a 2D world and a 3D menu preview to have.
-
-**If you were writing `instance.node.global_position`, write `instance.position()`.**
-That is the only source change this cost anywhere, and the accessor was always the
-right spelling: `node` is the handle, not the transform.
-
-**Asking for the wrong dimension is refused, and refused without leaking.** A 3D prop
-through `spawn_2d` and a 2D one through `spawn` both return null — and the
-instantiated scene is freed, because a scene that is built and then rejected is a
-leaked node that nothing reports. The suite checks the child count either side of both
-refusals for that reason.
-
-The **tools stay 3D.** A physics gun and a gravity gun are first-person tools with an
-origin and an aim direction, and a 2D game does not want either. The one exception is
-`DotPhysGun.set_frozen`, which handles both bodies — freezing is the one prop operation
-a 2D game does need (a lobby pins its furniture; a sandbox pins a wall), and a second
-copy of "zero the velocities, then set the mode" is a second thing that can forget the
-first half.
-
-## A definition is checkable without loading the scene
-
-The same reasoning as `DotItem` in dot-loadout and `DotAvatarSchema` in
-dot-user-avatar: a server validating a spawn against thirty players' budgets cannot
-load thirty scenes to do it, and a client showing a menu of four hundred props must
-not load four hundred. So the cost, the category, the entitlement and the mass are
-fields, and the scene is fetched only when something is actually created.
-
-`cost` is separate from `size` so a server can make one specific prop expensive
-without reclassifying it — which is what actually happens when one model turns out to
-be the one everybody spams.
-
-## The limits, and why each one exists
-
-A sandbox without limits lasts about four minutes, and the failure is mostly not
-malice: somebody holds the spawn key, or spawns a hundred crates to build something,
-and the physics step goes from two milliseconds to two hundred.
-
-| Limit | The failure without it |
+| Path | What |
 | --- | --- |
-| `per_player_budget` | One player fills the world |
-| `spawn_interval` | A **held key**. A budget alone does not stop it: reach the cap, remove one, spawn another — that is a spawn and a free per frame, which is worse for the server than the props are |
-| `world_budget` | Thirty players each **within** their own budget is thirty times the physics, and the server falls over while everybody is behaving |
-| `clean_up_on_leave` | The server accumulates the props of everybody who has ever visited |
-| `grab_mass_limit` | A physics gun that can lift the map |
-| `per_player_frozen` | A builder who freezes a thousand pieces. Separate from the physics budget because a frozen prop costs nothing to simulate, so they should be allowed more of them |
-| `max_size` | The one model that is the size of the map. A **ceiling**, where `cost` is a budget — allow a hundred crates and forbid that one without pricing it at a hundred |
+| `addons/dot_props/core/` | `DotPropDef` (scene, size, mass, cost, entitlement, damage numbers), `DotPropInstance`, `DotPropCatalogue` (the JSON an operator edits), `DotPropLimits` (a layered `DotConfig`) |
+| `addons/dot_props/runtime/` | `DotPropSpawner` (the node a game adds), `DotPropDamage`, `DotPropCarry`, `DotPropIO` |
+| `addons/dot_props/hunt/` | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
+| `addons/dot_props/tools/` | `DotPropTool` (reach, targeting, `may_act_on`), `DotPhysGun`, `DotGravGun` |
+| `fixtures/` | 3D and 2D prop bodies for the suite |
+| `examples/props_selftest.tscn` | the suite; spawns real `RigidBody3D`s into a real tree and checks every node is freed |
 
-The clock the cooldown runs on is **simulated seconds, advanced by the host**, never a
-wall clock. A wall clock lets a player who lags the server spawn faster than one who
-does not.
+## Running and testing
 
-`clean_up_on_leave = false` — a persistent build server, which is a real thing people
-run — still **disowns** the departed player's props. Without that, the budget of
-somebody who left is held against them for ever.
+- The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything)), then `godot --headless --path . res://examples/props_selftest.tscn`.
+- A limit must be tested against real bodies in a real tree: one that counted a dictionary would pass while the scene filled up.
+- A physics assertion reads after the step that consumed the impulse, and says what it excludes, or it is measuring gravity. [damage-and-carry](docs/damage-and-carry.md#testing-physics)
+- game-playground (spawning, tools, IO), mg-buses-from-hell (damage, carry), mg-prop-hunt and game-hide-n-seek (`hunt/`) are the consumers; the mass bug was found from a game.
 
-## Counts per kind, and a player's own limits
+## Rules that bite
 
-Beside the cost budget, every definition has a `limit_group` (empty is `props`) and `DotPropLimits.group_limits` caps how many of each group one player may have — a count, not a cost, because "how much of the simulation is yours" and "how many NPCs do you have" are different questions and one budget cannot ask both. A refusal names the group ("You have reached your npcs limit (10)."), because "you are at your limit" with a budget left over reads as the server being wrong.
-
-`DotPropSpawner.limit_resolver` is `func(player_id, key, base) -> int`, asked for `budget`, `frozen` and every group: the game decides who gets more. Who a player is — an admin, a supporter, somebody in a site group — is not this addon's business, and every server keeps it somewhere different. `limit_for`, `group_count` and `group_usage` are what a HUD or a `limits` command reads. game-playground is the consumer: `pg_max_<group>` and per-role overrides.
-
-## Ownership and undo are two different lists
-
-They were one list in the first version, and the self-test caught what that costs.
-Trimming the list to `undo_depth` removed props from their owner's **account** as well
-as from their history, so:
-
-- a player could hold `undo_depth` props against their budget and **any number beyond
-  it for free**;
-- `clear_player` left everything past the depth in the world for ever.
-
-Passing the undo depth means the oldest can no longer be undone. It does not mean the
-prop disappears, and it does not mean it stops being yours.
-
-## Protected owners (2026-10-06)
-
-`DotPropSpawner.set_protected(player_id, on)` makes an owner's props untouchable by anybody else: `DotPropTool.may_act_on` refuses every other wielder (before, and regardless of, the server's touch-others rule), and `DotPropDamage.hurt`, `break_now` and `impact` refuse any `by` that is not the owner, including none. It is what a building server calls creative mode, and it lives here rather than in a game because every tool and every source of harm already asks the spawner: a game keeping its own set would have to remember it at every call, and the first one it forgot would be the way round it. `player_left` drops the protection. `props_selftest`'s *a protected owner's props*.
-
-## Props wired to props (2026-10-06)
-
-`DotPropIO` is a link table beside the spawner: a prop declares what it says and hears in its definition's meta (`"outputs": ["pressed"]`, `"inputs": ["open", "close", "toggle"]`), `link(from, output, to, input)` wires one to the other, and `fire(from, output, value)` delivers to every wired input as `input_received`. **It knows nothing about doors.** What "toggle" does to a door and what presses a button are the game's, so a swinging door and a sliding one are the same link and a game's "use" key is its own. Wires are refused to a prop that does not declare the name, to itself, twice the same way, and past `max_links_per_prop` (16); a removal takes every wire touching the prop (a link to something gone is a button that silently does nothing); a chain deeper than `max_depth` (8) — a door wired back to whatever opened it — stops once, with a warning. Server-authoritative and not replicated: a client learns what a door did from the door. Asked for by Christian so other games can wire things too; game-playground's buttons, levers and doors are the first user. `props_selftest`'s *props wired to props* (12, the total armed by being declared wrong once).
-
-## `is_alive()` is not "the node is valid"
-
-`queue_free()` is deferred, so `is_instance_valid` stays true for the rest of the
-frame after a prop is removed — and a tool that checked only the node would keep
-pulling on a prop an admin has already cleaned up, for as long as that frame lasts.
-That is exactly the window in which a cleanup happens under somebody's physics gun.
-So `DotPropSpawner.remove` marks the instance dead immediately, and `is_alive()`
-checks both.
-
-`removed` is emitted **before** the node is freed, so a listener holding a
-reference — a gun with the prop in hand, a netcode replicating it — can let go while
-it still exists.
-
-## The tools
-
-**A tool is not a node and does not own a camera.** It is given an origin and a
-direction each tick, so the same physics gun works for a player with a first-person
-camera, a bot, a replay being played back, and a headless test — none of which have a
-viewport.
-
-**Ownership is deliberately not checked inside the tool.** Whether a player may move
-somebody else's crate is a server policy — a build server says no, a sandbox says yes,
-a competitive one says only for admins — and hard-coding either answer means the other
-needs a fork. The host passes `can_touch_others`.
-
-**One holder at a time**, enforced by `DotPropInstance.held_by`. Two guns pulling one
-crate toward two players makes it oscillate violently between them and costs ten times
-the physics step.
-
-### The physics gun holds with a spring
-
-Teleporting a rigid body to a target transform each tick is the obvious implementation
-and it is what makes a sandbox unplayable: a body *moved* rather than *pushed* has no
-velocity, so it passes through walls, wakes nothing it touches, and hands the solver
-an impossible situation when it is finally released. Setting a velocity toward where
-the prop should be is a force the solver understands — the prop pushes what is in the
-way, stops against a wall, and carries its momentum when let go, which is what makes
-throwing work at all.
-
-`max_speed` is a **safety cap, not a feel dial**. The spring's output is proportional
-to the distance to the goal, so a player who aims at the sky and then at their feet
-asks for an arbitrarily large velocity — which tunnels the prop through the world and,
-at the extreme, produces a non-finite position that poisons its whole physics island.
-
-`hold_rotation` is stored **relative to the view**, so turning your view turns the prop
-with it. An absolute orientation means the prop keeps facing north while the player
-walks around it, and building is impossible.
-
-`set_frozen` **zeroes the velocities as well as setting the mode**. Godot keeps a
-frozen body's velocities and applies them the instant it is unfrozen, so a prop frozen
-while falling fast leaps away when somebody thaws it — minutes later, with nothing to
-connect the two.
-
-### The gravity gun is not a smaller physics gun
-
-A physics gun is a building tool: arbitrary distance, free rotation, freezing, and a
-deliberately soft spring so a piece can be placed precisely. A gravity gun is a weapon
-and a toy: one fixed carrying position, a stiff hold so the prop tracks the crosshair,
-and a punt. Shipping one and calling it both gives a building tool that cannot throw
-and a weapon that cannot build.
-
-A punt is an **impulse**, not a velocity, so a heavy prop goes less far than a light
-one — which is what makes the tool feel like it has weight, and is free because the
-solver already divides by the mass.
-
-A frozen prop is **refused** by the gravity gun rather than thawed. The physics gun
-unfreezes what it grabs, because freezing is its own tool and unfreezing is the
-obvious undo; a gravity gun that quietly unfroze somebody's build would take a tower
-apart one piece at a time.
-
-## Validating
-
-```bash
-godot --headless --path . --import
-find . -name '*.gd' -not -path './.godot/*' | while read f; do
-    godot --headless --path . --check-only --script "res://${f#./}"
-done
-godot --headless --path . res://examples/props_selftest.tscn   # 234 checks, 29 sections
-```
-
-The suite spawns **real** `RigidBody3D`s into a real tree, because a limit that
-counted a dictionary would pass every test while the scene tree filled up — there is a
-check that every node is actually freed for exactly that reason.
-
-Three bugs it found, none of which errored — and a fourth found by game-playground:
-
-- **`DotPropDef.mass` was not put on the spawned body.** It was read in exactly one
-  place — `DotPropTool.may_act_on`, against `grab_mass_limit` — and the body kept
-  whatever mass its scene was saved with. So a catalogue saying 900 kg over a scene
-  saved at 20 kg gave a prop a physics gun refuses for being too heavy and a gravity
-  gun throws like a beach ball, with nothing erroring and the two numbers only ever
-  compared by a player wondering why. Invisible in this addon's own suite, where every
-  fixture is the same scene *and* the check is the limit rather than the physics; it
-  showed the moment a game shipped one scene for a dozen props, which is the cheap way
-  to do it and what game-playground does. `spawn` now assigns it before the body enters
-  the tree — earlier than the first physics step, for the reason two entries below.
-
-- **Ownership and undo shared one list** (above), which was a budget bypass.
-- **A prop removed while held was not let go of** until the deferred free landed.
-- **`per_player_frozen` and `size` were declared and read by nothing** — the family's
-  own "a value computed and never read" pattern, in the shape where the value is a
-  documented limit that does not limit anything. Both are now enforced:
-  `DotPhysGun.freeze_held` checks the first, `DotPropSpawner.may_spawn` the second.
-  Unfreezing is deliberately never refused, because a limit that stopped a moderator
-  tidying up would be a limit fighting its own operator.
-- Two in the test itself, both about physics timing and both worth remembering:
-  `apply_central_impulse` is not readable in `linear_velocity` until the step that
-  consumes it has run, and a `mass` assignment is not picked up by the server until
-  the next step — so an impulse applied in between is divided by the **old** mass.
-  The test reported a 900 kg prop flying twenty times further than a 20 kg one.
-
-## A player hiding as a prop (`hunt/`, 2026-10-09)
-
-The hide-and-seek games turn a player into a prop, and the arithmetic of that is the same in every one of them and has to be the same on both ends of a wire. `DotPropDisguise` is a value (an id, a size in metres, yaw, pitch, roll, locked) with the statics a game needs: `may_take` (too small, too big), `hull` (the capsule a motor sweeps: half the NARROWER footprint, clamped, never shorter than it is wide, so a sofa still fits through the door it came in by), `health` (`scale x volume^exponent`, clamped: a cabinet about nine bottles, not a hundred and fifty) and `health_after` (changing disguise keeps the fraction, or a hurt player heals by finding a bigger prop). The hitbox is the other half and IS the prop's box turned by `hit_basis`, because what a seeker shoots at is what they can see. Both ends compute the hull from the replicated size and never send it. `DotPropDisguiseRules` is the resource a game fills from its own config.
-
-`DotPropTaunts` is the noise a hidden player makes: a catalogue (`add_all` from JSON), a cooldown on top of the last taunt's length, points for a chosen one (and, if the server says so, a forced one), and the standing-still meter that forces one on somebody who has not left `auto_radius` of where they settled for `auto_after` seconds. A radius rather than a speed, because a player shuffling on one spot is standing still as far as being found goes. It plays nothing: where a sound comes from on every client is the game's replication. Simulated seconds are passed in, never a wall clock.
-
-**Neither is a node, and neither depends on anything but dot-core**, which is this addon's one rule. mg-prop-hunt is the first game. `props_selftest`'s last two sections.
+- Props are server-authoritative and never predicted. Every mutating method checks `authoritative` first. [spawning](docs/spawning.md#props-are-server-authoritative-and-are-not-predicted)
+- A definition is checkable without its scene; numbers go on `DotPropDef`, never in a script on the prop (a pack's `class_name` does not resolve). [spawning](docs/spawning.md#a-definition-is-checkable-without-loading-the-scene)
+- `DotPropDef.mass` is assigned before the body enters the tree. [spawning](docs/spawning.md#a-definition-is-checkable-without-loading-the-scene)
+- `spawn` (3D) and `spawn_2d` stay separate; the wrong dimension is refused and freed. Write `instance.position()`, never `instance.node.global_position`. [spawning](docs/spawning.md#a-prop-is-not-always-a-3d-one)
+- Every limit has a reason; cooldowns run on simulated seconds advanced by the host, never a wall clock. [spawning](docs/spawning.md#the-limits-and-why-each-one-exists)
+- A refusal names the limit it hit; who gets more is `limit_resolver`, never this addon. [spawning](docs/spawning.md#counts-per-kind-and-a-players-own-limits)
+- Ownership and undo are two lists; passing the undo depth never disowns. Departed players' props are disowned even when kept. [spawning](docs/spawning.md#ownership-and-undo-are-two-different-lists)
+- Protection is the spawner's (`set_protected`), asked by every tool and every damage path. [spawning](docs/spawning.md#protected-owners)
+- `is_alive()`, never `is_instance_valid`; `removed` fires before the free. [spawning](docs/spawning.md#is_alive-is-not-the-node-is-valid)
+- `DotPropIO` knows nothing about doors; a removal drops every wire; depth stops at `max_depth`. [spawning](docs/spawning.md#props-wired-to-props)
+- Tools take an origin and a direction, never a camera; ownership is the host's `can_touch_others`; one holder at a time. [tools](docs/tools.md#what-every-tool-shares)
+- The physics gun pushes with a velocity, never teleports; `max_speed` is a safety cap; `hold_rotation` is view-relative; freezing zeroes velocities. [tools](docs/tools.md#the-physics-gun-holds-with-a-spring)
+- The static `set_frozen` emits no signal. [tools](docs/tools.md#its-signals)
+- The gravity gun punts with an impulse and refuses a frozen prop. [tools](docs/tools.md#the-gravity-gun-is-not-a-smaller-physics-gun)
+- `DotPropDamage` describes a blast (`exploded`) and shoves only props; dot-combat hurts people. `max_health = 0` is indestructible. [damage-and-carry](docs/damage-and-carry.md#dotpropdamage-holds-the-health-and-applies-none-of-it)
+- Carry uses the angular velocity too, and `weight_scale` below 1. [damage-and-carry](docs/damage-and-carry.md#a-character-motor-does-not-touch-a-rigid-body)
+- A disguise's hull is computed on both ends from the replicated size, never sent. [hunt](docs/hunt.md#dotpropdisguise)
 
 ## Where a game plugs in
 
@@ -277,110 +61,22 @@ The hide-and-seek games turn a player into a prop, and the arithmetic of that is
 | --- | --- |
 | What can be spawned | `DotPropCatalogue`, from JSON |
 | What a prop costs against a budget | `DotPropDef.cost` |
+| How many of a kind a player may have | `DotPropDef.limit_group`, `DotPropLimits.group_limits` |
+| Who gets bigger limits | `DotPropSpawner.limit_resolver` |
 | Who may spawn what | `DotPropDef.entitlement` / `permission`, plus the `entitlements` callable |
 | How much anybody may spawn | `DotPropLimits`, layered like any `DotConfig` |
 | Where props go in the tree | `DotPropSpawner.world_ref` |
-| Whether players may move each other's props | `can_touch_others` on every tool call |
+| Whether players may move each other's props | `can_touch_others` on every tool call; `set_protected` for one owner |
 | How a physics gun feels | `stiffness`, `damping`, `push_speed` on `DotPhysGun` |
+| A held or frozen prop's collision layer | `DotPhysGun.grabbed` / `released` / `freeze_changed` |
 | A new tool | `DotPropTool` subclass |
 | Telling the player why a spawn failed | `DotPropSpawner.refused` |
 | Doing something to everything in the world | `DotPropSpawner.all_props`, which hands out a copy |
 | A prop that has code behind it | `DotPropDef.meta`, read on `spawned`. See game-playground's entities |
+| Buttons, levers, doors | `DotPropIO`, with `outputs` / `inputs` in the definition's meta |
+| What breaks, and what a blast does | `DotPropDef` damage fields; `DotPropDamage.exploded` connected to dot-combat |
+| Riding a prop | `DotPropCarry`, fed the motor's `ground_id` |
+| A player disguised as a prop | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | A prop in a 2D world | `DotPropSpawner.spawn_2d`. See game-hungario |
 
-## Things deliberately not here
-
-- **Replication.** Props are server-authoritative and the wire is dot-net's. What a
-  game replicates about a prop — transform only, or transform plus velocity for
-  extrapolation — depends on how many it has and how fast they move.
-- **A spawn menu.** dot-ui has the screen stack; a menu of four hundred props with
-  icons and a search box is a game's own design.
-- **Welding, ropes, thrusters, wheels.** Constraints are a much larger surface than
-  spawning, they interact with each other, and a half-built constraint system is worse
-  than none. `DotPropTool` is the hook.
-- **Duplicating or saving a build.** A save format has to survive the catalogue
-  changing under it, which is a versioning problem rather than a physics one.
-- **A damage model.** `DotPropDamage` holds hit points and decides when a prop breaks;
-  it does not decide what a blast does to a person. See below.
-- **Content delivery.** `DotPropDef.content_id` says which pack a prop lives in;
-  mounting it is dot-cloud's and the host's, exactly as `DotMapDef` does it.
-
-## `DotPhysGun` has signals now, and it had none
-
-`grab`, `release` and `set_frozen` changed a prop's state and told nobody, so a game could
-not react to any of the three. That is not a small gap once collision layers are involved:
-`DotPhysicsLayout.sandbox_3d` has a `held_prop` row and a `frozen_prop` row — the two rows
-only a sandbox has a use for — and without a signal a game could set a prop's layer at
-spawn and then be wrong for the rest of its life. A carried crate that still collides with
-the player carrying it shoves them backwards down a corridor.
-
-`grabbed`, `released` and `freeze_changed` are the three. **`set_frozen` does not emit**,
-because it is static and a static function cannot emit an instance signal; a game calling
-it directly is changing the state behind the tool's back and gets nothing, which is the
-honest report of what a static can offer.
-
-## Breaking one, and standing on one
-
-Both were listed here as deliberately absent and both came back, because a game turned
-up that is entirely about them: a crate you climb onto to escape a bus, and one you
-break with a hammer to deny somebody else the same. The two entries were right about
-the boundary and wrong about the gap.
-
-**`DotPropDamage` holds the health and applies none of it.** The numbers live on
-`DotPropDef` — `max_health`, `break_impact_speed`, `explode_radius`, `explode_damage`,
-`explode_force` — because a definition has to be checkable without loading the scene,
-which is the rule the cost and the entitlement already follow. The *state* lives in the
-node, keyed by the instance id the spawner already hands out, so a breakable prop stays
-a plain scene with a `RigidBody3D` at its root. That matters more than it looks: a
-script on the prop would have to resolve its own `class_name` at load, and this family
-has already measured that a script inside a mounted dot-cloud pack cannot.
-
-**When a barrel goes off, this addon describes the blast and stops.** `exploded` carries
-a centre, a radius, a damage and a force; dot-combat's `explode()` is what turns that
-into hurt people, and the game connects the two. A damage model here would be a second
-set of rules about who a blast hurts, next to the one that already has hit groups,
-armour, team scales and falloff. The one thing it *does* apply is the shove to other
-props, because a prop is the only thing this addon knows about — a player, an NPC and a
-vehicle each need somebody else's id space and authority rules.
-
-**`break_impact_speed` is a speed and not damage, and that is the whole point.** A crate
-has to survive being walked into and must not survive a bus, and what separates those is
-how fast the thing arrived rather than how many times it has been hit. `max_health` is
-the hammer; `impact()` is the bus. A prop can have either, both, or neither — and
-`max_health = 0` is *indestructible* rather than "dies to anything", because every prop
-written before the field existed decodes to zero and the other default would make the
-floor breakable the day a game added a damage source.
-
-### And a character motor does not touch a rigid body
-
-`DotPropCarry` is the half that makes a crate an object rather than scenery that happens
-to be a `RigidBody3D`. `DotFpsMotor` — and every motor like it — sweeps a shape and
-slides along what it hits, so a crate is exactly as solid as the floor and exactly as
-immovable: a player stands on one and it does not sink, does not tip, and does not carry
-them anywhere when something shoves it out from under them. **Every number involved is
-correct.** There is nothing to notice except standing on a crate and expecting something.
-
-It lives outside the motor on purpose, and the motor already published what it needs:
-`DotFpsState.ground_id` is the instance id of the collider underfoot, documented there
-as a local physics handle that is deliberately *not* part of the simulation. So riding
-is resolved per frame on each machine from a handle each machine has, rather than
-becoming another predicted field two machines would have to agree about — which they
-could not, for the same reason props are not predicted at all.
-
-Two things in it are the kind that are invisible when wrong:
-
-- **The carried velocity includes the angular part.** A prop that is only sliding moves
-  every point on it at the same speed, so the linear velocity alone is right. A prop that
-  is *turning* moves a player on its edge much faster than its centre — and taking only
-  the linear part makes them drift slowly toward the middle, with no error anywhere.
-- **`weight_scale` is not 1.0**, because a swept capsule is not a physics body. A real
-  body resting on a crate settles into an equilibrium the solver finds; a character is
-  teleported to its new position every tick and never settles, so the full weight makes a
-  crate that somebody is standing perfectly still on accelerate away downward for ever.
-
-The suite covers all of it — and cost the two physics-timing lessons this file already
-records, for the third and fourth time. An impulse is not readable in `linear_velocity`
-until the step that consumes it has run, so the explosion's shove measured zero; and the
-check that a crate outside the radius is *not* shoved passed a falling crate at 0.16 m/s,
-which was one tick of gravity. **A physics assertion that does not say what it is
-excluding is measuring gravity.**
+Deliberately not here: replication, a spawn menu, constraints (welding, ropes, thrusters, wheels), saving a build, a damage model for people, content delivery. [spawning](docs/spawning.md#deliberately-not-here)
