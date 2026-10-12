@@ -9,4 +9,5 @@ The reasoning behind the sandbox layer, one subject per file. [CLAUDE.md](../CLA
 | [damage-and-carry.md](damage-and-carry.md) | `DotPropDamage`, `DotPropCarry`, and testing physics |
 | [pieces.md](pieces.md) | `DotPropPieces`: collision shaped like the model, why it is measured offline, what it costs |
 | [hunt.md](hunt.md) | `DotPropDisguise` and `DotPropTaunts`, for players hiding as props |
+| [toys.md](toys.md) | The toy catalogue: placed by data, loose, driven and fixed kinds, replication by state and a use counter, the launchers, the awake cap, footprints |
 | [history.md](history.md) | The bugs, and how each looked |

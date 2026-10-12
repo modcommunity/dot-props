@@ -17,3 +17,6 @@ Thumbs.db
 
 # Editors
 .vscode/
+
+# Renders are evidence for a review, not assets.
+/screenshots/

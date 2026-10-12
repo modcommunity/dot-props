@@ -185,5 +185,36 @@ if taunts.due(player_key, now):
     play(taunts.taunt(player_key, now, &"", true, tick))
 ```
 
+## Toys
+
+Things on a map players play with, placed by the map's data: a beach ball, a football, a bowling ball and pins, a barrel, a tyre, a punching bag, a swing, a see-saw, a roundabout, a wobbly platform, a trampoline, a bounce pad, a switch, a lamp post, a fountain, a horn and a bell. The server simulates them and clients draw what it sends.
+
+```gdscript
+var toys := DotPropToyBox.new()
+toys.authoritative = is_server
+toys.draw = not is_dedicated_server
+toys.loose_layer = layout.layer_mask(&"toy")      # balls and barrels: people walk through and push them
+toys.loose_mask = layout.collision_mask(&"toy")
+toys.solid_layer = layout.layer_mask(&"prop")     # see-saws and frames: people stand on them
+toys.solid_mask = layout.collision_mask(&"prop")
+add_child(toys)
+toys.build(map["toys"])          # [{"toy": "beach_ball", "at": [x, y, z], "yaw": 0}, ...]
+
+# On the server, every tick, for each player:
+toys.push_from(feet, velocity, radius, height)   # walking into a ball sends it on
+toys.stand_on(feet, 70.0)                         # weight on a see-saw
+toys.advance(delta)
+# When a player presses use:
+var index := toys.aimed(eye, aim)
+if index >= 0:
+    toys.use(index, eye, aim)
+# In your movement code, on every end: a trampoline or pad under the feet throws them.
+var thrown := toys.launch_for(feet, velocity)    # {velocity, index} or {}
+```
+
+Replicate each toy by its index with `state_transform()`, `on` and `count`, and call `show_state` with them on a client. Connect `sound` to your audio and add `DotPropToySounds.rows()` to your sound catalogue. `sv_toys 0` removes them, `sv_toys_awake` caps how many simulate at once (24, or 8 in a browser), and `sv_toys_push` sets how hard walking into one pushes it. Add or retune toys with `DotPropToyCatalogue.merge_json`. See [docs/toys.md](docs/toys.md).
+
+The toy sounds are Kenney's (CC0) plus a horn made for this addon; `addons/dot_props/toys/sounds/CREDITS.md` lists every file. The toys are drawn with meshes made in code, so there are no models to credit.
+
 ## License
 MIT. See [LICENSE](LICENSE).

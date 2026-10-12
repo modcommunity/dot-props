@@ -11,5 +11,7 @@ extends RefCounted
 # 3: core/: DotPropPieces (collision shaped like the model).
 # 4: DotPropDisguise.lean_basis, standing_size, standing_hull, middle_height, model_transform,
 #    box_transform: a leant prop rests on the floor.
-const LEVEL := 4
+# 5: toys/: DotPropToyCatalogue, DotPropToyBox, DotPropToy, DotPropToyRules, DotPropToySounds,
+#    DotPropToyLook (networked physics toys and interactables placed by a map's data).
+const LEVEL := 5
 const OLDEST := 1

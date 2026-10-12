@@ -1,6 +1,6 @@
 # dot-props
 
-A sandbox layer: spawnable props, the limits that keep a server alive, the tools that move them (a physics gun and a gravity gun), props that break and props a player can ride, props wired to props, and the arithmetic of a player hiding as a prop.
+A sandbox layer: spawnable props, the limits that keep a server alive, the tools that move them (a physics gun and a gravity gun), props that break and props a player can ride, props wired to props, the arithmetic of a player hiding as a prop, and a catalogue of toys a map places (balls, swings, see-saws, trampolines, switches).
 
 Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is specific to props. The reasoning is in [docs/](docs/README.md).
 
@@ -16,6 +16,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | [docs/damage-and-carry.md](docs/damage-and-carry.md) | `DotPropDamage`, `DotPropCarry`, any physics assertion |
 | [docs/hunt.md](docs/hunt.md) | `DotPropDisguise`, `DotPropTaunts` |
 | [docs/pieces.md](docs/pieces.md) | `DotPropPieces`, a map prop's collision, a game's measuring tool |
+| [docs/toys.md](docs/toys.md) | anything in `toys/`, or a game placing or replicating toys |
 | [docs/history.md](docs/history.md) | the bugs, and how each looked |
 
 ## Layout
@@ -26,15 +27,18 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | `addons/dot_props/runtime/` | `DotPropSpawner` (the node a game adds), `DotPropDamage`, `DotPropCarry`, `DotPropIO` |
 | `addons/dot_props/hunt/` | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | `addons/dot_props/tools/` | `DotPropTool` (reach, targeting, `may_act_on`), `DotPhysGun`, `DotGravGun` |
+| `addons/dot_props/toys/` | `DotPropToyCatalogue` (18 stock toys over 16 kinds, retuned from JSON), `DotPropToyBox` (a map's toys, the awake cap, push/stand/use/hit/launch), `DotPropToy` (one, its bodies and look), `DotPropToyRules` (`sv_toys*`), `DotPropToySounds` (+ `sounds/`, CC0), `DotPropToyLook` (meshes made in code) |
 | `fixtures/` | 3D and 2D prop bodies for the suite |
 | `examples/props_selftest.tscn` | the suite; spawns real `RigidBody3D`s into a real tree and checks every node is freed |
+| `examples/toy_gallery.tscn` | every stock toy rendered on a lawn (xvfb; `--kick` shows them moving) |
 
 ## Running and testing
 
 - The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything)), then `godot --headless --path . res://examples/props_selftest.tscn`.
 - A limit must be tested against real bodies in a real tree: one that counted a dictionary would pass while the scene filled up.
 - A physics assertion reads after the step that consumed the impulse, and says what it excludes, or it is measuring gravity. [damage-and-carry](docs/damage-and-carry.md#testing-physics)
-- game-playground (spawning, tools, IO), mg-buses-from-hell (damage, carry), mg-prop-hunt and game-hide-n-seek (`hunt/`) are the consumers; the mass bug was found from a game.
+- game-playground (spawning, tools, IO), mg-buses-from-hell (damage, carry), mg-prop-hunt and game-hide-n-seek (`hunt/`), game-hide-n-seek (`toys/`) are the consumers; the mass bug was found from a game.
+- After touching a toy's look, `xvfb-run -a godot --path . res://examples/toy_gallery.tscn -- --kick` and look at `screenshots/toys.png`.
 
 ## Rules that bite
 
@@ -56,6 +60,12 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - Carry uses the angular velocity too, and `weight_scale` below 1. [damage-and-carry](docs/damage-and-carry.md#a-character-motor-does-not-touch-a-rigid-body)
 - A disguise's hull is computed on both ends from the replicated size, never sent. [hunt](docs/hunt.md#dotpropdisguise)
 - A leant disguise turns about its box's middle and rests on the floor: draw with `model_transform`, hit with `box_transform`, sweep `standing_hull`. [hunt](docs/hunt.md#dotpropdisguise)
+- **Toys are placed by data and paired by index**: both ends build the same toys in the same order from the map, so a game replicates each by index (its state is `state_transform()`, `on`, `count`) and never sends what a toy is. [toys](docs/toys.md#placed-by-data-paired-by-index)
+- A loose toy is on a layer people do not collide with and is pushed by the game's `push_from`; a person standing on a see-saw is `stand_on`. A character motor never moves a rigid body. [toys](docs/toys.md#three-kinds-of-motion)
+- A swing, a bag, a see-saw, a platform and a roundabout are driven angles posing a kinematic body, never Godot joints (a hinge pushed off its axis blew a seat a thousand kilometres away). [toys](docs/toys.md#three-kinds-of-motion)
+- `count` is a use counter, not an event: a client plays the sound when it moves. Knocks are heard from motion (`sense`), which works on a frozen copy. [toys](docs/toys.md#replication-the-servers-physics-a-clients-picture)
+- A trampoline or pad is `launch_for`, a pure function the game calls in its movement on every end; only the server counts the bounce. [toys](docs/toys.md#the-launchers-are-movement-not-physics)
+- The selftest's toys are turned 20 degrees and a hundred metres up: aligned axes hid the hinge bug, and a crate left falling by an earlier section flung a tyre 300 m. [toys](docs/toys.md#testing)
 - `DotPropPieces.measure` is tool time only (V-HACD, seconds per model, maybe absent from an export template); the game ships `encode`d pieces and both ends build from them. One decomposition per material, or a leaf clump and the trunk become one hull. [pieces](docs/pieces.md)
 
 ## Where a game plugs in
@@ -82,5 +92,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | A player disguised as a prop | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | A prop in a 2D world | `DotPropSpawner.spawn_2d`. See game-hungario |
 | A map prop's collision shaped like its model | `DotPropPieces.measure` in the game's measuring tool, `decode` + `shapes` at run time. See game-hide-n-seek |
+| Toys on a map | `DotPropToyBox` with the game's collision bits, `build(placements)`; per tick `push_from`/`stand_on`/`advance`, the use key's `aimed` + `use`, shots' `hit`, `launch_for` in movement; replicate `state_transform`/`on`/`count`. See game-hide-n-seek |
+| A new toy, or a stock one retuned | `DotPropToyCatalogue.merge` / `merge_json` |
+| How many toys simulate, whether there are any | `DotPropToyRules` (`sv_toys`, `sv_toys_awake`, `sv_toys_push`), `bind_cvars` on the server, `follow_cvars` on a client |
 
-Deliberately not here: replication, a spawn menu, constraints (welding, ropes, thrusters, wheels), saving a build, a damage model for people, content delivery. [spawning](docs/spawning.md#deliberately-not-here)
+Deliberately not here: replication (a toy's state is three fields a game's own behaviour sends), a spawn menu, constraints (welding, ropes, thrusters, wheels), saving a build, a damage model for people, content delivery. [spawning](docs/spawning.md#deliberately-not-here)

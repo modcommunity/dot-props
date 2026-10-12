@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 246
+const CHECKS := 276
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 30
+const SECTIONS := 33
 
 var _passed := 0
 var _failed := 0
@@ -72,6 +72,9 @@ func _run() -> void:
 	_test_disguise()
 	_test_taunts()
 	_test_pieces()
+	_test_toy_catalogue()
+	await _test_toys()
+	await _test_toy_mirror()
 
 	print("")
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -1687,3 +1690,251 @@ func _test_pieces() -> void:
 	crate.free()
 	_done()
 
+
+
+# --- Toys ----------------------------------------------------------------------
+
+func _test_toy_catalogue() -> void:
+	_section("the toy catalogue: a dozen and more, every kind, retuned from data")
+	var c := DotPropToyCatalogue.stock()
+	_check(c.size() >= 12, "the stock has at least a dozen toys", str(c.size()))
+	var kinds := {}
+	for id in c.ids():
+		kinds[c.get_def(StringName(id))["kind"]] = true
+	_check(kinds.size() == DotPropToyCatalogue.KINDS.size(), "and uses every kind", str(kinds.keys()))
+	var sounds := DotPropToySounds.ids()
+	var unheard := PackedStringArray()
+	for id in c.ids():
+		var def := c.get_def(StringName(id))
+		for key in ["sound_hit", "sound_use"]:
+			if def[key] != &"" and not sounds.has(def[key]):
+				unheard.append("%s.%s" % [id, key])
+	_check(unheard.is_empty(), "every sound a toy names is a row in DotPropToySounds", ", ".join(unheard))
+	var absent := PackedStringArray()
+	for row in DotPropToySounds.rows():
+		for path: String in row["variants"]:
+			if not ResourceLoader.exists(path):
+				absent.append(path)
+	_check(absent.is_empty(), "and every row's files are shipped", ", ".join(absent))
+	var tuned := c.merge({"beach_ball": {"mass": 0.5}, "giant_ball": {"kind": "ball", "size": [2, 2, 2]}})
+	_check(tuned.ok and is_equal_approx(float(c.get_def(&"beach_ball")["mass"]), 0.5)
+		and float(c.get_def(&"beach_ball")["bounce"]) > 0.7 and c.has(&"giant_ball"),
+		"a game retunes one field of a stock toy and adds its own from data")
+	var bad := c.merge({"rocket": {"kind": "rocket"}})
+	_check(not bad.ok and not c.has(&"rocket"), "a kind that does not exist is refused, by name", bad.error.message if not bad.ok else "")
+	_check(DotPropToyBox.normal_placement({"toy": "swing", "at": [1, 0, 2], "yaw": 90, "links": [3]}).get("links") == [3]
+		and DotPropToyBox.normal_placement({"at": [0, 0, 0]}).is_empty(), "a placement is {toy, at}, and one without a toy is refused")
+	_done()
+
+
+## A floor, and a box of every stock toy on it in a row, four metres apart. A hundred metres
+## up, clear of whatever the earlier sections left falling (a crate under the tyre flung it
+## three hundred metres).
+func _toy_world(authoritative: bool) -> Array:
+	var holder := Node3D.new()
+	holder.position = Vector3(0, 100, 0)
+	_world.add_child(holder)
+	var floor_body := StaticBody3D.new()
+	floor_body.collision_layer = 1
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(200, 1, 200)
+	shape.shape = box
+	shape.position = Vector3(0, -0.5, 0)
+	floor_body.add_child(shape)
+	holder.add_child(floor_body)
+	var toys := DotPropToyBox.new()
+	toys.authoritative = authoritative
+	toys.draw = true
+	# world 1, loose 2, solid 4, footprints 8.
+	toys.loose_layer = 2
+	toys.loose_mask = 1 | 2 | 4
+	toys.solid_layer = 4
+	toys.solid_mask = 1 | 2
+	toys.footprint_layer = 8
+	toys.aim_mask = 1 | 2 | 4
+	holder.add_child(toys)
+	toys.catalogue = DotPropToyCatalogue.stock()
+	var placements: Array = []
+	var x := 0.0
+	for id in toys.catalogue.ids():
+		# Turned, so nothing passes only because a toy's axes are the world's: a swing pushed
+		# at an angle to its bar is what blew Godot's hinge apart.
+		placements.append({"toy": id, "at": [x, 0, 0], "yaw": 20})
+		x += 4.0
+	# The switch (index of light_switch) turns the lamp.
+	var ids := toys.catalogue.ids()
+	placements[ids.find("light_switch")]["links"] = [ids.find("lamp_post")]
+	var built := toys.build(placements)
+	return [holder, toys, built]
+
+
+func _index(toys: DotPropToyBox, id: String) -> int:
+	for t in toys.toys:
+		if String(t.def["id"]) == id:
+			return t.index
+	return -1
+
+
+func _step_physics(frames: int) -> void:
+	for _i in range(frames):
+		await get_tree().physics_frame
+
+
+func _test_toys() -> void:
+	_section("toys on the server: pushed, kicked, stood on, switched, bounced on, capped, sent home")
+	var made := _toy_world(true)
+	var floor_body: Node3D = made[0]
+	var toys: DotPropToyBox = made[1]
+	_check((made[2] as DotResult).ok and toys.count() == toys.catalogue.size(), "every stock toy is built", str(toys.count()))
+	await _step_physics(90)
+	var fell := PackedStringArray()
+	for t in toys.toys:
+		if t.body != null and t.body.global_position.y < 99.95:
+			fell.append("%s at %s" % [t.def["id"], t.body.global_position.snapped(Vector3.ONE * 0.01)])
+	_check(fell.is_empty(), "a second and a half on, nothing has fallen through the floor", ", ".join(fell))
+
+	# Walking into the beach ball at 5 m/s sends it ahead.
+	var ball := toys.toy(_index(toys, "beach_ball"))
+	var start := ball.body.global_position
+	var feet := start + Vector3(-0.75, -0.5, 0)
+	var pushed := toys.push_from(feet, Vector3(5, 0, 0), 0.35, 1.8)
+	await _step_physics(20)
+	_check(pushed == 1 and ball.body.global_position.x > start.x + 1.0,
+		"a person walking into the beach ball sends it on ahead", "%d pushed, moved %.2f m" % [pushed, ball.body.global_position.x - start.x])
+	var far := toys.push_from(start + Vector3(-6, 0, 0), Vector3(5, 0, 0), 0.35, 1.8)
+	_check(far == 0, "and one walking six metres away does not")
+
+	# The football kicked along -z.
+	var football := toys.toy(_index(toys, "football"))
+	var f0 := football.body.global_position
+	var kicked := toys.use(football.index, f0 + Vector3(0, 1.4, 1.0), Vector3(0, -0.4, -1))
+	await _step_physics(15)
+	_check(kicked and football.body.global_position.z < f0.z - 1.5, "the use key kicks the football along the look",
+		"%.2f m" % (f0.z - football.body.global_position.z))
+
+	# A person on one end of the see-saw tips it down at that end.
+	var seesaw := toys.toy(_index(toys, "seesaw"))
+	var end_feet := seesaw.body.global_position + seesaw.body.global_basis.x * 1.3 + Vector3(0, 0.1, 0)
+	for _i in range(40):
+		var _bore := toys.stand_on(end_feet, 70.0)
+		await get_tree().physics_frame
+	var tip := seesaw.body.to_global(Vector3(1.5, 0, 0)).y
+	var other := seesaw.body.to_global(Vector3(-1.5, 0, 0)).y
+	_check(tip < other - 0.3, "somebody standing on one end of the see-saw tips it down there", "%.2f against %.2f" % [tip, other])
+
+	var spinner := toys.toy(_index(toys, "merry_go_round"))
+	var _spun := toys.use(spinner.index, spinner.body.global_position + Vector3(1.6, 1.0, 0), Vector3(0, 0, 1))
+	await _step_physics(10)
+	var turned := spinner.body.global_basis.x.angle_to(spinner.global_basis.x)
+	_check(absf(spinner._spin.y) > 0.5 and turned > 0.05 and spinner.body.global_position.distance_to(spinner.rest.origin) < 0.01,
+		"the roundabout spins about its hub and goes nowhere", "%.2f rad/s, turned %.2f" % [spinner._spin.y, turned])
+
+	# The swing, pushed at an angle to its bar, swings along its own plane and stays on the bar.
+	var swing := toys.toy(_index(toys, "swing"))
+	var _pushed := toys.use(swing.index, swing.body.global_position + Vector3(0.5, 1.2, 1.0), Vector3(-0.4, -0.2, -1))
+	var furthest := 0.0
+	var stayed := true
+	for _i in range(90):
+		await get_tree().physics_frame
+		furthest = maxf(furthest, swing.body.global_position.distance_to(swing.rest.origin))
+		var from_bar := swing.body.global_position.distance_to(swing._pivot_global())
+		stayed = stayed and absf(from_bar - swing._hang.length()) < 0.01
+	_check(furthest > 0.4 and stayed and swing.body.global_position.distance_to(swing.rest.origin) < furthest,
+		"a pushed swing swings out, back, and never off its bar", "out %.2f m" % furthest)
+	var bag := toys.toy(_index(toys, "punching_bag"))
+	var _punched := toys.use(bag.index, bag.body.global_position + Vector3(0, 0, 1.2), Vector3(0, 0, -1))
+	await _step_physics(12)
+	_check(bag.body.global_position.distance_to(bag.rest.origin) > 0.15, "a punched bag swings away from the punch")
+
+	var lamp := toys.toy(_index(toys, "lamp_post"))
+	var switch := toys.toy(_index(toys, "light_switch"))
+	var was_lit := lamp.on
+	var _pressed := toys.use(switch.index, switch.global_position + Vector3(0, 1.4, 1), Vector3(0, -0.3, -1))
+	_check(switch.on == lamp.on and lamp.on != was_lit and switch.count == 1 and lamp.count == 1,
+		"the switch flips its linked lamp, and both count it")
+	var horn := toys.toy(_index(toys, "horn"))
+	var _honk := toys.use(horn.index, Vector3.ZERO, Vector3.FORWARD)
+	_check(horn.count == 1 and not toys.toy(_index(toys, "trampoline")).usable(), "the horn counts a honk; a trampoline is not used, it is jumped on")
+
+	var tramp := toys.toy(_index(toys, "trampoline"))
+	var on_bed := toys.launch_for(tramp.global_position + Vector3(0.3, tramp._size.y, 0), Vector3(1, -6, 0))
+	var beside := toys.launch_for(tramp.global_position + Vector3(2.5, 0, 0), Vector3(0, -6, 0))
+	var rising := toys.launch_for(tramp.global_position + Vector3(0, tramp._size.y, 0), Vector3(0, 3, 0))
+	_check(not on_bed.is_empty() and (on_bed["velocity"] as Vector3).y > 8.0 and is_equal_approx((on_bed["velocity"] as Vector3).x, 1.0)
+		and beside.is_empty() and rising.is_empty(), "landing on the trampoline's bed throws a person up; beside it or rising, nothing")
+	var pad := toys.toy(_index(toys, "bounce_pad"))
+	var thrown := toys.launch_for(pad.global_position + Vector3(0, pad._size.y, 0), Vector3.ZERO)
+	_check(not thrown.is_empty() and (thrown["velocity"] as Vector3).z > 4.0 and (thrown["velocity"] as Vector3).y > 6.0,
+		"the bounce pad throws forward along its arrow and up")
+
+	# The cap: two awake at most; the rest put to sleep.
+	toys.rules.max_awake = 2
+	for id in ["beach_ball", "football", "barrel", "tyre", "bowling_ball"]:
+		var t := toys.toy(_index(toys, id))
+		var _u := toys.use(t.index, t.body.global_position + Vector3(0, 1, 1), Vector3(0, 0, -1))
+	await _step_physics(2)
+	toys.advance(1.0 / 60.0)
+	_check(toys.awake_count() <= 2, "past sv_toys_awake the longest untouched are put to sleep", str(toys.awake_count()))
+	toys.rules.max_awake = 0
+
+	var nav := toys.nav_bodies()
+	var shapes := (nav[0] as Node).get_child_count() if not nav.is_empty() else 0
+	var fixed_kinds := 0
+	for t in toys.toys:
+		if t.footprint().size != Vector3.ZERO:
+			fixed_kinds += 1
+	_check(shapes == fixed_kinds and fixed_kinds >= 8 and toys.toy(_index(toys, "beach_ball")).footprint().size == Vector3.ZERO,
+		"a footprint for every toy that stands in the way, none for a loose one", "%d of %d" % [shapes, fixed_kinds])
+
+	ball.body.global_position = Vector3(0, -50, 0)
+	toys.kill_y = 0.0
+	toys.advance(1.0 / 60.0)
+	_check(ball.body.global_position.distance_to(ball.rest.origin) < 0.01, "a toy that falls out of the world goes home")
+	toys.reset()
+	await _step_physics(2)
+	_check(football.body.global_position.distance_to(football.rest.origin) < 0.05 and lamp.on == bool(lamp.def["on"]),
+		"a reset puts every toy home and every lamp as the map has it")
+
+	var _off := toys.rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "0")
+	_check(not ball.visible and ball.process_mode == Node.PROCESS_MODE_DISABLED and toys.aimed(Vector3(0, 1, 3), Vector3.FORWARD) == -1,
+		"sv_toys 0 takes them out of the world")
+	var _on := toys.rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "1")
+
+	toys.queue_free()
+	floor_body.queue_free()
+	await get_tree().process_frame
+	_done()
+
+
+func _test_toy_mirror() -> void:
+	_section("toys on a client: frozen, posed from the server's state, heard when they change")
+	var made := _toy_world(false)
+	var floor_body: Node3D = made[0]
+	var toys: DotPropToyBox = made[1]
+	var up := Vector3(0, 100, 0)
+	var ball := toys.toy(_index(toys, "beach_ball"))
+	_check(ball.body.freeze and ball.body.freeze_mode == RigidBody3D.FREEZE_MODE_KINEMATIC and not ball.use(Vector3.ZERO, Vector3.FORWARD),
+		"a client's toy is frozen and does nothing itself")
+	var heard: Array = []
+	toys.sound.connect(func(id: StringName, _at: Vector3, _s: float) -> void: heard.append(id))
+	ball.show_state(up + Vector3(3, 2, 1), Quaternion(Vector3.UP, 0.5), false, 0)
+	await _step_physics(3)
+	_check(ball.body.global_position.distance_to(up + Vector3(3, 2, 1)) < 0.01, "posed where the server says")
+	var horn := toys.toy(_index(toys, "horn"))
+	horn.show_state(Vector3.ZERO, Quaternion.IDENTITY, false, 1)
+	toys._process(1.0 / 60.0)
+	_check(heard.has(DotPropToySounds.HORN), "a use count that moved is heard", str(heard))
+	# A ball dropped onto the floor (in the server's states) is heard landing.
+	heard.clear()
+	for i in range(20):
+		var y := maxf(2.0 - 0.12 * float(i), 0.5)
+		ball.show_state(up + Vector3(3, y, 1), Quaternion.IDENTITY, false, 0)
+		toys._process(1.0 / 60.0)
+	_check(heard.has(DotPropToySounds.BOUNCE), "and a ball stopping short on the floor is heard", str(heard))
+	var aimed := toys.aimed(up + Vector3(3, 2, 4), Vector3(0, 0, -1), 4.0)
+	_check(aimed == ball.index, "the use prompt finds a client's toy along the look")
+	toys.queue_free()
+	floor_body.queue_free()
+	await get_tree().process_frame
+	_done()
