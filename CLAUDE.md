@@ -55,6 +55,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - `DotPropDamage` describes a blast (`exploded`) and shoves only props; dot-combat hurts people. `max_health = 0` is indestructible. [damage-and-carry](docs/damage-and-carry.md#dotpropdamage-holds-the-health-and-applies-none-of-it)
 - Carry uses the angular velocity too, and `weight_scale` below 1. [damage-and-carry](docs/damage-and-carry.md#a-character-motor-does-not-touch-a-rigid-body)
 - A disguise's hull is computed on both ends from the replicated size, never sent. [hunt](docs/hunt.md#dotpropdisguise)
+- A leant disguise turns about its box's middle and rests on the floor: draw with `model_transform`, hit with `box_transform`, sweep `standing_hull`. [hunt](docs/hunt.md#dotpropdisguise)
 - `DotPropPieces.measure` is tool time only (V-HACD, seconds per model, maybe absent from an export template); the game ships `encode`d pieces and both ends build from them. One decomposition per material, or a leaf clump and the trunk become one hull. [pieces](docs/pieces.md)
 
 ## Where a game plugs in

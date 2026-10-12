@@ -110,6 +110,55 @@ func hit_basis(view_yaw: float = 0.0) -> Basis:
 	return Basis.from_euler(Vector3(deg_to_rad(pitch), deg_to_rad(facing), deg_to_rad(roll)), EULER_ORDER_YXZ)
 
 
+## The lean alone (pitch and roll, no facing): what decides how tall and wide the prop stands.
+## The facing turns about the vertical and changes neither.
+func lean_basis() -> Basis:
+	return Basis.from_euler(Vector3(deg_to_rad(pitch), 0.0, deg_to_rad(roll)), EULER_ORDER_YXZ)
+
+
+## The prop's box once leant, as the world sees it: x and z across, y up. A bottle on its side
+## is long and low, on its nose as tall as upright.
+func standing_size() -> Vector3:
+	var b := lean_basis()
+	var h := size * 0.5
+	return Vector3(
+		absf(b.x.x) * h.x + absf(b.y.x) * h.y + absf(b.z.x) * h.z,
+		absf(b.x.y) * h.x + absf(b.y.y) * h.y + absf(b.z.y) * h.z,
+		absf(b.x.z) * h.x + absf(b.y.z) * h.y + absf(b.z.z) * h.z
+	) * 2.0
+
+
+## The collision capsule for the prop as it stands, leant: [method hull] of [method
+## standing_size]. What a game puts on the motor.
+##
+## [b]Leaning turns about the prop's middle, not its foot.[/b] A prop tilted about the middle
+## of its footprint on the floor, as the first build did, put half of a bottle laid on its side
+## under the floor: a hiding place nobody could shoot, which is cheating. The middle stands at
+## half the standing height ([method middle_height]), so the lowest corner of the box rests on
+## the floor whatever the turn, and the hull is the leant box's.
+func standing_hull(rules: DotPropDisguiseRules) -> Vector2:
+	return hull(standing_size(), rules)
+
+
+## How far above the feet the middle of the prop's box is once leant.
+func middle_height() -> float:
+	return standing_size().y * 0.5
+
+
+## Where to draw a model whose origin is the middle of its footprint at the bottom of its box,
+## for a player whose feet are at [param feet]: turned, and lifted so its lowest corner is on
+## the floor.
+func model_transform(feet: Vector3, view_yaw: float = 0.0) -> Transform3D:
+	var turn := hit_basis(view_yaw)
+	return Transform3D(turn, feet + Vector3(0.0, middle_height(), 0.0) - turn * Vector3(0.0, size.y * 0.5, 0.0))
+
+
+## The prop's box (half extents [code]size / 2[/code]) relative to the feet: turned, its
+## middle at [method middle_height]. What a game's hitbox is.
+func box_transform(view_yaw: float = 0.0) -> Transform3D:
+	return Transform3D(hit_basis(view_yaw), Vector3(0.0, middle_height(), 0.0))
+
+
 ## Tilts by [param steps] of the rules' step, forward ([param forward]) or sideways, within
 ## the rules' limit. Returns whether anything changed.
 func tilt(steps: int, forward: bool, rules: DotPropDisguiseRules) -> bool:

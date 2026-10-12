@@ -13,7 +13,7 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 243
+const CHECKS := 246
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1557,6 +1557,37 @@ func _test_disguise() -> void:
 	var back := DotPropDisguise.from_wire(d.to_wire())
 	_check(back.prop_id == &"cabinet" and back.size.is_equal_approx(cabinet) and is_equal_approx(back.roll, 15.0)
 		and back.locked == d.locked, "a disguise survives the wire")
+
+	# Leant every way a player can turn it (every quarter turn of pitch and roll, and the
+	# eighths between), a bottle's box never goes under the floor and its lowest corner is on
+	# it: the first build turned a prop about the foot of its box and half a bottle laid on its
+	# side was under the floor, out of every shot.
+	var bottle_d := DotPropDisguise.of(&"bottle", Vector3(0.1, 0.32, 0.1))
+	var worst_low := INF
+	var worst_high := -INF
+	var hull_ok := true
+	for p in range(-4, 5):
+		for q in range(-4, 5):
+			bottle_d.pitch = p * 45.0
+			bottle_d.roll = q * 45.0
+			var frame := bottle_d.model_transform(Vector3(2.0, 1.0, -3.0), 37.0)
+			var lowest := INF
+			for corner in range(8):
+				var local := Vector3(0.05 if corner & 1 else -0.05, 0.32 if corner & 2 else 0.0, 0.05 if corner & 4 else -0.05)
+				lowest = minf(lowest, (frame * local).y)
+			worst_low = minf(worst_low, lowest - 1.0)
+			worst_high = maxf(worst_high, lowest - 1.0)
+			var box_mid := bottle_d.box_transform(37.0).origin.y
+			hull_ok = hull_ok and is_equal_approx(box_mid, bottle_d.standing_size().y * 0.5) \
+				and bottle_d.standing_hull(rules).y >= bottle_d.standing_size().y - 0.001 or bottle_d.standing_size().y > rules.hull_max_height
+	_check(worst_low > -0.0005 and worst_high < 0.0005,
+		"a leant prop rests on the floor at every turn, never under it (lowest corner %.4f..%.4f m)" % [worst_low, worst_high])
+	bottle_d.pitch = 90.0
+	bottle_d.roll = 0.0
+	var lying := bottle_d.standing_size()
+	_check(is_equal_approx(lying.y, 0.1) and is_equal_approx(lying.z, 0.32),
+		"a bottle on its side is as tall as it is wide and as long as it was tall (%s)" % str(lying))
+	_check(hull_ok, "and its hull and hitbox follow the leant box: as tall, the middle at half its height")
 
 	var bad := DotPropDisguiseRules.new()
 	bad.hull_min_height = 0.1

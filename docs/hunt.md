@@ -11,7 +11,9 @@ A value (an id, a size in metres, yaw, pitch, roll, locked) with the statics a g
 - `health`: `scale x volume^exponent`, clamped. A cabinet is about nine bottles, not a hundred and fifty.
 - `health_after`: changing disguise keeps the fraction, or a hurt player heals by finding a bigger prop.
 
-The hitbox is the other half and IS the prop's box turned by `hit_basis`, because what a seeker shoots at is what they can see. **Both ends compute the hull from the replicated size and never send it.** `DotPropDisguiseRules` is the resource a game fills from its own config.
+- `standing_size`, `standing_hull`, `middle_height`, `model_transform`, `box_transform` (API level 4): the prop **leant**. A lean (pitch, roll) turns the box about its middle, and the middle stands at half the leant height, so the lowest corner rests on the floor at any turn; the hull is the leant box's (a bottle on its side is low and long). The first consumer turned its model about the foot of the box, and mg-prop-hunt's first play test asked to lay a water bottle on its side or its nose "WITHOUT going into the ground (since that'd be cheating)": half of it was under the floor, out of every shot. The suite turns a bottle every eighth of a turn both ways and holds its lowest corner to the floor.
+
+The hitbox is the other half and IS the prop's box turned by `hit_basis` (placed by `box_transform`), because what a seeker shoots at is what they can see. **Both ends compute the hull from the replicated size and never send it.** `DotPropDisguiseRules` is the resource a game fills from its own config.
 
 ## `DotPropTaunts`
 

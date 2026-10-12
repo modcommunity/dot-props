@@ -9,5 +9,7 @@ extends RefCounted
 # 1: everything before this file existed (an absent file reads as 1).
 # 2: hunt/: DotPropDisguise, DotPropDisguiseRules and DotPropTaunts.
 # 3: core/: DotPropPieces (collision shaped like the model).
-const LEVEL := 3
+# 4: DotPropDisguise.lean_basis, standing_size, standing_hull, middle_height, model_transform,
+#    box_transform: a leant prop rests on the floor.
+const LEVEL := 4
 const OLDEST := 1
