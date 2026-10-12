@@ -83,7 +83,8 @@ static func measure(model: Node, frame: Transform3D, max_pieces: int = -1, conca
 		var size := mesh.get_aabb().size
 		# Each material's share of the pieces follows its share of the model's size.
 		var share := clampi(roundi(max_pieces * size[size.max_axis_index()] / longest), 1, max_pieces)
-		out.append_array(_decompose(mesh, share, concavity))
+		for piece in _decompose(mesh, share, concavity):
+			out.append(_clamped(piece, box))
 
 	# One convex piece, or pieces that fill the box anyway, are no better than the box round
 	# them and cost more.
@@ -118,6 +119,16 @@ static func _decompose(mesh: Mesh, max_pieces: int, concavity: float) -> Array[P
 			out.append(points)
 
 	holder.free()
+	return out
+
+
+## [param piece] with every point pulled inside [param box]. V-HACD's hulls stand a centimetre or
+## two proud of the model (a desk's top 2 cm over its surface), and a lamp placed on the desk's
+## measured top would sink into the desk's collision; clamping keeps a hull convex.
+static func _clamped(piece: PackedVector3Array, box: AABB) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for p in piece:
+		out.append(_rounded(p.clamp(box.position, box.end)))
 	return out
 
 
@@ -210,6 +221,33 @@ static func contains(pieces: Array, point: Vector3, margin: float = 0.0) -> bool
 		if _inside_hull(piece, point, margin):
 			return true
 	return false
+
+
+## The highest point of any piece on the vertical line through ([param x], [param z]) in the
+## prop's frame, or -INF when the line misses every piece. Where a thing set down on the prop
+## at that spot comes to rest: a pillow on a bed's mattress, not on its headboard's height.
+static func top_at(pieces: Array, x: float, z: float) -> float:
+	var top := -INF
+	for piece: PackedVector3Array in pieces:
+		var box := bounds([piece])
+		if x < box.position.x or x > box.end.x or z < box.position.z or z > box.end.z:
+			continue
+		var low := -INF
+		var high := INF
+		for plane in planes(piece):
+			# Inside is n.p - d <= 0; along the line only y varies.
+			var rest := plane.d - plane.normal.x * x - plane.normal.z * z
+			if absf(plane.normal.y) < 0.000001:
+				if rest < -0.0005:
+					high = -INF
+					break
+			elif plane.normal.y > 0.0:
+				high = minf(high, rest / plane.normal.y)
+			else:
+				low = maxf(low, rest / plane.normal.y)
+		if high >= low - 0.0005 and high > top:
+			top = high
+	return top
 
 
 ## Every plane of the hull of [param points], outward. Brute force over point triples, which is

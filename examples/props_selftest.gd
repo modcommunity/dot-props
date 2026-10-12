@@ -13,7 +13,7 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 242
+const CHECKS := 243
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1631,6 +1631,9 @@ func _test_pieces() -> void:
 	_check(DotPropPieces.contains(pieces, Vector3(0.0, 0.72, 0.0)) and DotPropPieces.contains(pieces, Vector3(0.9, 0.3, 0.4), 0.02),
 		"its top and its legs are solid")
 	_check(not DotPropPieces.contains(pieces, Vector3(0.0, 0.3, 0.0)), "and the space under it is not")
+	_check(absf(DotPropPieces.top_at(pieces, 0.3, 0.2) - 0.75) < 0.03 and DotPropPieces.top_at(pieces, 3.0, 0.0) == -INF,
+		"a thing set down on it rests on its top, and nothing is under a point off it",
+		"%.3f" % DotPropPieces.top_at(pieces, 0.3, 0.2))
 	var again := DotPropPieces.measure(table, Transform3D.IDENTITY)
 	_check(JSON.stringify(DotPropPieces.encode(again)) == JSON.stringify(DotPropPieces.encode(pieces)),
 		"measuring twice gives the same numbers, so a --check can compare files")
