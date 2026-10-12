@@ -8,5 +8,6 @@ extends RefCounted
 
 # 1: everything before this file existed (an absent file reads as 1).
 # 2: hunt/: DotPropDisguise, DotPropDisguiseRules and DotPropTaunts.
-const LEVEL := 2
+# 3: core/: DotPropPieces (collision shaped like the model).
+const LEVEL := 3
 const OLDEST := 1

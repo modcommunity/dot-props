@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 234
+const CHECKS := 242
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 29
+const SECTIONS := 30
 
 var _passed := 0
 var _failed := 0
@@ -71,6 +71,7 @@ func _run() -> void:
 	await _test_carry_pushes()
 	_test_disguise()
 	_test_taunts()
+	_test_pieces()
 
 	print("")
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -1605,3 +1606,50 @@ func _test_taunts() -> void:
 	t.reset()
 	_check(t.ready_in(&"p", 0.0) == 0.0, "a new round starts everybody's clock again")
 	_done()
+
+
+func _test_pieces() -> void:
+	_section("pieces: collision shaped like the model, measured once and read back")
+
+	# A table built of boxes: a 2 x 1 m top 0.75 m up on four legs. Its box would fill the
+	# space under it; its pieces must not.
+	var table := Node3D.new()
+	var parts := [[Vector3(2.0, 0.08, 1.0), Vector3(0.0, 0.71, 0.0)]]
+	for x in [-0.9, 0.9]:
+		for z in [-0.4, 0.4]:
+			parts.append([Vector3(0.1, 0.67, 0.1), Vector3(x, 0.335, z)])
+	for part: Array in parts:
+		var mesh := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = part[0]
+		mesh.mesh = box
+		mesh.position = part[1]
+		table.add_child(mesh)
+
+	var pieces := DotPropPieces.measure(table, Transform3D.IDENTITY)
+	_check(pieces.size() >= 2, "a table is cut into pieces", "%d" % pieces.size())
+	_check(DotPropPieces.contains(pieces, Vector3(0.0, 0.72, 0.0)) and DotPropPieces.contains(pieces, Vector3(0.9, 0.3, 0.4), 0.02),
+		"its top and its legs are solid")
+	_check(not DotPropPieces.contains(pieces, Vector3(0.0, 0.3, 0.0)), "and the space under it is not")
+	var again := DotPropPieces.measure(table, Transform3D.IDENTITY)
+	_check(JSON.stringify(DotPropPieces.encode(again)) == JSON.stringify(DotPropPieces.encode(pieces)),
+		"measuring twice gives the same numbers, so a --check can compare files")
+
+	var wire: Variant = JSON.parse_string(JSON.stringify(DotPropPieces.encode(pieces)))
+	var back := DotPropPieces.decode(wire)
+	_check(back.size() == pieces.size() and DotPropPieces.bounds(back).is_equal_approx(DotPropPieces.bounds(pieces)),
+		"pieces survive JSON and come back the same")
+	_check(DotPropPieces.decode([[1, 2, 3], "nonsense", 7]).is_empty(), "anything malformed is skipped, not guessed at")
+	var shapes := DotPropPieces.shapes(back)
+	_check(shapes.size() == back.size() and shapes[0].points.size() == back[0].size(), "one convex shape per piece")
+	table.free()
+
+	# A crate is its own box: no pieces, and the game keeps colliding with the box.
+	var crate := MeshInstance3D.new()
+	var cube := BoxMesh.new()
+	cube.size = Vector3(1.0, 1.0, 1.0)
+	crate.mesh = cube
+	_check(DotPropPieces.measure(crate, Transform3D.IDENTITY).is_empty(), "a crate gets no pieces: its box is as good")
+	crate.free()
+	_done()
+

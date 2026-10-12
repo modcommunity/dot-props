@@ -15,13 +15,14 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | [docs/tools.md](docs/tools.md) | `DotPropTool`, `DotPhysGun`, `DotGravGun` |
 | [docs/damage-and-carry.md](docs/damage-and-carry.md) | `DotPropDamage`, `DotPropCarry`, any physics assertion |
 | [docs/hunt.md](docs/hunt.md) | `DotPropDisguise`, `DotPropTaunts` |
+| [docs/pieces.md](docs/pieces.md) | `DotPropPieces`, a map prop's collision, a game's measuring tool |
 | [docs/history.md](docs/history.md) | the bugs, and how each looked |
 
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `addons/dot_props/core/` | `DotPropDef` (scene, size, mass, cost, entitlement, damage numbers), `DotPropInstance`, `DotPropCatalogue` (the JSON an operator edits), `DotPropLimits` (a layered `DotConfig`) |
+| `addons/dot_props/core/` | `DotPropDef` (scene, size, mass, cost, entitlement, damage numbers), `DotPropInstance`, `DotPropCatalogue` (the JSON an operator edits), `DotPropLimits` (a layered `DotConfig`), `DotPropPieces` (collision shaped like the model) |
 | `addons/dot_props/runtime/` | `DotPropSpawner` (the node a game adds), `DotPropDamage`, `DotPropCarry`, `DotPropIO` |
 | `addons/dot_props/hunt/` | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | `addons/dot_props/tools/` | `DotPropTool` (reach, targeting, `may_act_on`), `DotPhysGun`, `DotGravGun` |
@@ -54,6 +55,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - `DotPropDamage` describes a blast (`exploded`) and shoves only props; dot-combat hurts people. `max_health = 0` is indestructible. [damage-and-carry](docs/damage-and-carry.md#dotpropdamage-holds-the-health-and-applies-none-of-it)
 - Carry uses the angular velocity too, and `weight_scale` below 1. [damage-and-carry](docs/damage-and-carry.md#a-character-motor-does-not-touch-a-rigid-body)
 - A disguise's hull is computed on both ends from the replicated size, never sent. [hunt](docs/hunt.md#dotpropdisguise)
+- `DotPropPieces.measure` is tool time only (V-HACD, seconds per model, maybe absent from an export template); the game ships `encode`d pieces and both ends build from them. One decomposition per material, or a leaf clump and the trunk become one hull. [pieces](docs/pieces.md)
 
 ## Where a game plugs in
 
@@ -78,5 +80,6 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | Riding a prop | `DotPropCarry`, fed the motor's `ground_id` |
 | A player disguised as a prop | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | A prop in a 2D world | `DotPropSpawner.spawn_2d`. See game-hungario |
+| A map prop's collision shaped like its model | `DotPropPieces.measure` in the game's measuring tool, `decode` + `shapes` at run time. See game-hide-n-seek |
 
 Deliberately not here: replication, a spawn menu, constraints (welding, ropes, thrusters, wheels), saving a build, a damage model for people, content delivery. [spawning](docs/spawning.md#deliberately-not-here)

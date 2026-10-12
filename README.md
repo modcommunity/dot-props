@@ -104,6 +104,21 @@ A prop with `max_health` 0 (the default) cannot be broken. When a prop with an e
 ### Standing on props
 A character controller treats a prop like the floor, so a crate never sinks, tips or moves a player standing on it. `DotPropCarry` fixes that. Call `ride()` once per tick for each player on the ground: it applies their weight to the prop under them and returns how far the prop moved them this tick. `push()` shoves a prop a player walks into.
 
+### Collision shaped like the model
+A prop placed in a map collides as its box unless you give it pieces. `DotPropPieces.measure(model, frame)` cuts a model into a few convex hulls (a tree's trunk, branches and leaf clumps; a table's top and legs) with the engine's convex decomposition. It is slow and needs the meshes, so run it in a tool and ship the numbers:
+
+```gdscript
+# In your measuring tool (an editor build):
+var pieces := DotPropPieces.measure(model_scene.instantiate(), Transform3D(Basis.from_scale(Vector3.ONE * scale), offset))
+file[prop_id] = DotPropPieces.encode(pieces)   # empty when the box is as good
+
+# At run time, on the server and every client alike:
+for shape in DotPropPieces.shapes(DotPropPieces.decode(file[prop_id])):
+    var node := CollisionShape3D.new()
+    node.shape = shape
+    body.add_child(node)
+```
+
 ### Wiring props together
 A prop lists what it can send and receive in its `meta`, for example `{"outputs": ["pressed"]}` on a button and `{"inputs": ["open", "close"]}` on a door.
 
