@@ -364,6 +364,58 @@ func hit(collider: Object, point: Vector3, direction: Vector3, impulse: float) -
 	return t.index
 
 
+## How hard a shot pushes a toy, from its damage: the speed it would give a toy of up to
+## [constant SHOT_MASS_CAP] kg. A pistol's 25 sends a beach ball off at 5 m/s, a heavy rifle's
+## 60 at the 9 m/s cap; a barrel, at the mass cap, takes a quarter of that. A bullet's real
+## momentum would barely move a ball, and a damage-sized impulse sent one off at 40 m/s.
+const SHOT_SPEED_PER_DAMAGE := 0.2
+const SHOT_SPEED_MIN := 1.5
+const SHOT_SPEED_MAX := 9.0
+const SHOT_MASS_CAP := 3.0
+
+
+## A shot that did [param damage] hitting [param collider] at [param point] along
+## [param direction]: [method hit] with the push its damage is worth. Server side. The toy's
+## index, or -1 when the collider is not a toy's (so a game's hit scan calls it first and falls
+## through to its own damage). A shot bell rings.
+func shot(collider: Object, point: Vector3, direction: Vector3, damage: float) -> int:
+	var t := toy_of(collider)
+	if t == null or damage <= 0.0:
+		return -1
+	var speed := clampf(damage * SHOT_SPEED_PER_DAMAGE, SHOT_SPEED_MIN, SHOT_SPEED_MAX)
+	return hit(collider, point, direction, speed * _shot_mass(t))
+
+
+## The mass a push is reckoned for: the toy's, up to the cap, and something for a fixed toy
+## (a bell weighs nothing in the catalogue, and a push of nothing is refused).
+static func _shot_mass(t: DotPropToy) -> float:
+	return clampf(float(t.def.get("mass", 1.0)), 0.25, SHOT_MASS_CAP)
+
+
+## A blast at [param at]: every moving toy within [param radius] is pushed away from it, at up to
+## [param speed] m/s at the centre and nothing at the edge, as a toy of up to
+## [constant SHOT_MASS_CAP] kg would be. Server side. How many it moved.
+func blast(at: Vector3, radius: float, speed: float) -> int:
+	if not authoritative or not rules.enabled or radius <= 0.0:
+		return 0
+	var n := 0
+	for t in toys:
+		if t.body == null:
+			continue
+		var from := t.body.global_position - at
+		var dist := from.length()
+		if dist > radius:
+			continue
+		var away := (from / dist) if dist > 0.01 else Vector3.UP
+		# Up a little as well, or a blast on the ground slides a ball along it.
+		away = (away + Vector3(0, 0.35, 0)).normalized()
+		var push := speed * (1.0 - dist / radius) * _shot_mass(t)
+		if push > 0.0 and t.hit(t.body.global_position, away, push):
+			t.touched_at = _now
+			n += 1
+	return n
+
+
 func _flip(index: int) -> Variant:
 	var t := toy(index)
 	return t.flip() if t != null else null

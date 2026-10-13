@@ -821,7 +821,13 @@ func stand_on(feet: Vector3, mass: float, p_gravity: float) -> bool:
 
 ## A shot or a blast: [param impulse] N·s along [param direction] at [param point]. Server side.
 func hit(point: Vector3, direction: Vector3, impulse: float) -> bool:
-	if not authoritative or body == null or impulse <= 0.0:
+	if not authoritative or impulse <= 0.0:
+		return false
+	# A bell is rung by a shot as by a hand: its count moves, which every client hears.
+	if kind == &"bell":
+		_bump_count()
+		return true
+	if body == null:
 		return false
 	if _driven:
 		_nudge(point, direction.normalized() * impulse / maxf(float(def.get("mass", 1.0)), 0.1))

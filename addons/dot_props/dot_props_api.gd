@@ -14,6 +14,7 @@ extends RefCounted
 # 5: toys/: DotPropToyCatalogue, DotPropToyBox, DotPropToy, DotPropToyRules, DotPropToySounds,
 #    DotPropToyLook (networked physics toys and interactables placed by a map's data).
 # 6: DotPropToy.carry, surface_velocity, show_state's delta; DotPropToyBox.carry_for;
-#    DotPropCarry.toys (a roundabout carries the people standing on it).
+#    DotPropCarry.toys (a roundabout carries the people standing on it); DotPropToyBox.shot
+#    and blast (a hit scan's damage and an explosion turned into a push), a shot bell rings.
 const LEVEL := 6
 const OLDEST := 1

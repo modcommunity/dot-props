@@ -13,7 +13,7 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 282
+const CHECKS := 285
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1890,6 +1890,24 @@ func _test_toys() -> void:
 	var thrown := toys.launch_for(pad.global_position + Vector3(0, pad._size.y, 0), Vector3.ZERO)
 	_check(not thrown.is_empty() and (thrown["velocity"] as Vector3).z > 4.0 and (thrown["velocity"] as Vector3).y > 6.0,
 		"the bounce pad throws forward along its arrow and up")
+
+	# Shot: a pistol's damage knocks a pin over and away; the floor is not a toy; a bell rings.
+	var pin := toys.toy(_index(toys, "bowling_pin"))
+	var p0 := pin.body.global_position
+	var shot_at := toys.shot(pin.body, p0 + Vector3(0, 0.2, 0), Vector3(1, 0, 0), 25.0)
+	var floor_shot := toys.shot(floor_body.get_child(0), p0 - Vector3(0, 0.5, 0), Vector3.DOWN, 25.0)
+	var bell := toys.toy(_index(toys, "bell"))
+	var rung := bell.count
+	var bell_shot := toys.shot(bell.fixed, bell.global_position + Vector3(0, 1.8, 0), Vector3(0, 0, -1), 25.0)
+	var tyre := toys.toy(_index(toys, "tyre"))
+	var t0 := tyre.body.global_position
+	var blasted := toys.blast(t0 + Vector3(-1.0, 0, 0), 4.0, 6.0)
+	await _step_physics(12)
+	_check(shot_at == pin.index and pin.body.global_position.distance_to(p0) > 0.15 and floor_shot == -1,
+		"a shot pushes the toy it hits, and the floor is not one", "moved %.2f m" % pin.body.global_position.distance_to(p0))
+	_check(bell_shot == bell.index and bell.count == (rung + 1) % 256, "a shot bell rings", "%d, %d -> %d" % [bell_shot, rung, bell.count])
+	_check(blasted >= 1 and tyre.body.global_position.x > t0.x + 0.1, "a blast beside the tyre sends it away",
+		"%d moved, tyre %.2f m" % [blasted, tyre.body.global_position.x - t0.x])
 
 	# The cap: two awake at most; the rest put to sleep.
 	toys.rules.max_awake = 2
