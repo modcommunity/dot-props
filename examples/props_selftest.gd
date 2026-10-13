@@ -13,7 +13,7 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 281
+const CHECKS := 282
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1909,6 +1909,17 @@ func _test_toys() -> void:
 			fixed_kinds += 1
 	_check(shapes == fixed_kinds and fixed_kinds >= 8 and toys.toy(_index(toys, "beach_ball")).footprint().size == Vector3.ZERO,
 		"a footprint for every toy that stands in the way, none for a loose one", "%d of %d" % [shapes, fixed_kinds])
+	# Through the trampoline's footprint, under its bed and between its legs: a ray with every
+	# bit set meets nothing there, and the navigation parser still reads the boxes.
+	var bed := toys.toy(_index(toys, "trampoline"))
+	var across := PhysicsRayQueryParameters3D.create(bed.global_position + Vector3(0, 1.2, -3), bed.global_position + Vector3(0, 1.2, 3))
+	var met := (toys.get_world_3d().direct_space_state.intersect_ray(across) as Dictionary)
+	var source := NavigationMeshSourceGeometryData3D.new()
+	var parse_mesh := NavigationMesh.new()
+	parse_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
+	NavigationServer3D.parse_source_geometry_data(parse_mesh, source, nav[0] as Node)
+	_check(met.is_empty() and source.get_vertices().size() >= shapes * 8 * 3,
+		"a footprint stops no ray, and a baker still parses it", "met %s, %d floats" % [str(DotPropToyBox.toy_of(met.get("collider")).def["id"] if DotPropToyBox.toy_of(met.get("collider")) != null else met.get("collider")), source.get_vertices().size()])
 
 	ball.body.global_position = Vector3(0, -50, 0)
 	toys.kill_y = 0.0

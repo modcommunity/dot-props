@@ -42,7 +42,7 @@ A trampoline or a pad throwing a person is `launch_for(feet, velocity)`: a pure 
 
 ## Footprints
 
-`nav_bodies()` is one static body of boxes on a layer nothing collides with, one per toy that stands in the way, at least two metres tall so a baker never takes a low one (a pad) for a step. A game bakes its bots' walkable mesh round them; loose toys have none, because a bot walks through them like anybody.
+`nav_bodies()` is one static body of boxes on a layer nothing collides with, one per toy that stands in the way, at least two metres tall so a baker never takes a low one (a pad) for a step. A game bakes its bots' walkable mesh round them; loose toys have none, because a bot walks through them like anybody. The body is never in the physics space (disabled, `DISABLE_MODE_REMOVE`): the navigation parser reads shapes off the nodes, and a shooting game's hit scan with every bit in its mask stopped on the invisible boxes. `nav_bodies()` is empty while `sv_toys` is 0.
 
 ## Sounds
 

@@ -170,6 +170,10 @@ func _build_footprints() -> void:
 	_footprints.name = "Footprints"
 	_footprints.collision_layer = footprint_layer
 	_footprints.collision_mask = 0
+	# Never in the physics space: a baker parses the shapes off the nodes, and a game's shot
+	# with every bit in its mask would otherwise stop on a two-metre box nobody can see.
+	_footprints.disable_mode = CollisionObject3D.DISABLE_MODE_REMOVE
+	_footprints.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(_footprints)
 	for t in toys:
 		var box := t.footprint()
@@ -185,9 +189,10 @@ func _build_footprints() -> void:
 
 ## The bodies a bot's walkable mesh should be baked round: one static body of boxes, one per
 ## toy that stands in the way (a swing's sweep, a see-saw, a roundabout, a trampoline). Never
-## the loose toys, which a person walks through and pushes.
+## the loose toys, which a person walks through and pushes. Out of the physics space, so no
+## ray or body ever meets them; none while `sv_toys` is 0.
 func nav_bodies() -> Array:
-	return [_footprints] if _footprints != null else []
+	return [_footprints] if _footprints != null and (rules == null or rules.enabled) else []
 
 
 # --- The server's tick ------------------------------------------------------------
@@ -395,8 +400,6 @@ func _on_rules_changed() -> void:
 	for t in toys:
 		t.visible = on
 		t.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
-	if _footprints != null:
-		_footprints.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 
 
 func describe() -> Dictionary:
