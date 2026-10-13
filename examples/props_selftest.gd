@@ -13,7 +13,7 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 285
+const CHECKS := 286
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1906,6 +1906,13 @@ func _test_toys() -> void:
 	_check(shot_at == pin.index and pin.body.global_position.distance_to(p0) > 0.15 and floor_shot == -1,
 		"a shot pushes the toy it hits, and the floor is not one", "moved %.2f m" % pin.body.global_position.distance_to(p0))
 	_check(bell_shot == bell.index and bell.count == (rung + 1) % 256, "a shot bell rings", "%d, %d -> %d" % [bell_shot, rung, bell.count])
+	# Along a ray, for a game whose own trace never meets a toy: the football from three metres,
+	# and nothing through the floor.
+	var ball2 := toys.toy(_index(toys, "bowling_ball"))
+	var aim_from := ball2.body.global_position + Vector3(0, 0, 3.0)
+	var along := toys.shot_along(aim_from, Vector3(0, 0, -1), 10.0, 25.0, 1)
+	var under := toys.shot_along(ball2.body.global_position + Vector3(0, 2, 0), Vector3.DOWN, 1.0, 25.0, 1)
+	_check(along == ball2.index and under == -1, "a shot along a ray pushes the first toy on it, and a short one reaches none", "%d, %d" % [along, under])
 	_check(blasted >= 1 and tyre.body.global_position.x > t0.x + 0.1, "a blast beside the tyre sends it away",
 		"%d moved, tyre %.2f m" % [blasted, tyre.body.global_position.x - t0.x])
 

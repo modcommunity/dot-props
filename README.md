@@ -214,6 +214,7 @@ var thrown := toys.launch_for(feet, velocity)    # {velocity, index} or {}
 var carried := toys.carry_for(feet, delta, state.ground_id)   # {offset, yaw, index} or {}
 # When a shot hits something, before your own damage:
 toys.shot(collider, point, direction, damage)    # a toy's index, or -1 when it was not one
+toys.shot_along(origin, direction, reach, damage, level_mask)   # when your trace never meets a toy
 toys.blast(at, radius, speed)                     # an explosion
 ```
 

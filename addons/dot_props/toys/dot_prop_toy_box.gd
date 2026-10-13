@@ -386,6 +386,22 @@ func shot(collider: Object, point: Vector3, direction: Vector3, damage: float) -
 	return hit(collider, point, direction, speed * _shot_mass(t))
 
 
+## A shot from [param origin] along [param direction], [param reach] metres: the first toy on it
+## is pushed as [method shot] pushes, unless something on [param wall_mask] (the level) stops
+## the ray first. For a game whose own hit scan never meets a toy (an analytic trace, or a mask
+## without the toys' layers) and which lets the shot go on to whoever is behind the ball, so a
+## toy is never cover. Server side. The toy's index, or -1.
+func shot_along(origin: Vector3, direction: Vector3, reach: float, damage: float, wall_mask: int = 0) -> int:
+	if not authoritative or not rules.enabled or toys.is_empty() or not is_inside_tree() or reach <= 0.0:
+		return -1
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction.normalized() * reach, wall_mask | loose_layer | solid_layer)
+	query.collide_with_areas = false
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return -1
+	return shot(hit.get("collider"), hit.get("position"), direction, damage)
+
+
 ## The mass a push is reckoned for: the toy's, up to the cap, and something for a fixed toy
 ## (a bell weighs nothing in the catalogue, and a push of nothing is refused).
 static func _shot_mass(t: DotPropToy) -> float:
