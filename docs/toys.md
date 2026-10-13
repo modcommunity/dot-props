@@ -42,6 +42,7 @@ A trampoline or a pad throwing a person is `launch_for(feet, velocity)`: a pure 
 
 - `DotPropToyRules.cap()`: at most 24 loose toys simulating at once, 8 on a machine without threads (a browser build, whose physics runs between the frames it draws). Past it, the longest untouched are put to sleep, slowest first. Driven toys are not counted: they are a few multiplications, and asleep when still.
 - Meshes are made in code (`DotPropToyLook`), matte, untextured, a handful of materials shared by colour: nothing to deliver and cheap under the Compatibility renderer. The lamp's light casts no shadow; the fountain is a `CPUParticles3D` of 90.
+- Measured in a browser (a web export without threads, so the cap is 8; a lobby of 27 toys, 14 of them loose; headless Chromium with software rendering; physics at 128 Hz): asleep toys cost nothing, the same frame time as `sv_toys 0`; an awake loose toy is about 0.5 to 0.7 ms of physics a frame on the one thread; the cap of 8 holds physics to about 4 to 5 ms a frame (5.4 to 5.9 ms with the lobby's asleep cost), where frame rate fell from 55-59 to 45-50; with the cap lifted, 14 awake toys took 10.6 to 15.1 ms of physics a frame, 22 to 41 fps, p95 frames up to 48 ms. At 1280x720 software rendering dominates (123 to 135 ms a frame either way), so the cap matters most on a machine that draws quickly. That is why the threadless cap is 8 and not more.
 - A toy below `kill_y` goes home; `reset` sends them all home (a game calls it at a round's start).
 
 ## Footprints
