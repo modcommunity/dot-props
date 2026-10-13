@@ -13,5 +13,7 @@ extends RefCounted
 #    box_transform: a leant prop rests on the floor.
 # 5: toys/: DotPropToyCatalogue, DotPropToyBox, DotPropToy, DotPropToyRules, DotPropToySounds,
 #    DotPropToyLook (networked physics toys and interactables placed by a map's data).
-const LEVEL := 5
+# 6: DotPropToy.carry, surface_velocity, show_state's delta; DotPropToyBox.carry_for;
+#    DotPropCarry.toys (a roundabout carries the people standing on it).
+const LEVEL := 6
 const OLDEST := 1

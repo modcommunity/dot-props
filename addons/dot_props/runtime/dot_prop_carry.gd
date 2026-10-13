@@ -61,6 +61,10 @@ const CHANNEL := "props"
 ## one crate having a bad frame.
 @export_range(0.0, 1000.0, 1.0) var max_carry_speed: float = 60.0
 
+## A map's toys, for the roundabout: a person standing on a turning one is carried round with
+## it by [method ride] ([method DotPropToyBox.carry_for]). Null rides props only.
+var toys: DotPropToyBox = null
+
 var _spawner: DotPropSpawner = null
 
 
@@ -148,7 +152,12 @@ func ride(ground_id: int, point: Vector3, mass_kg: float, delta: float) -> Vecto
 	if delta <= 0.0:
 		return Vector3.ZERO
 	stand(ground_id, point, mass_kg, delta)
-	return velocity_at(ground_id, point) * delta
+	var lift := velocity_at(ground_id, point) * delta
+	if lift == Vector3.ZERO and toys != null and is_instance_valid(toys):
+		var carried := toys.carry_for(point, delta, ground_id)
+		if not carried.is_empty():
+			return carried["offset"]
+	return lift
 
 
 ## Shove a prop, for a player walking into one rather than standing on one.

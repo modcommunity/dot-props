@@ -13,7 +13,7 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 276
+const CHECKS := 281
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1830,6 +1830,29 @@ func _test_toys() -> void:
 	_check(absf(spinner._spin.y) > 0.5 and turned > 0.05 and spinner.body.global_position.distance_to(spinner.rest.origin) < 0.01,
 		"the roundabout spins about its hub and goes nowhere", "%.2f rad/s, turned %.2f" % [spinner._spin.y, turned])
 
+	# Somebody standing on the turning deck is carried round the hub with it: a rotation, so a
+	# rider a metre out is still a metre out after it, and turned by the same angle.
+	var rider := spinner.body.global_position + Vector3(1.0, 0.02, 0)
+	var carried := toys.carry_for(rider, 1.0 / 60.0, spinner.body.get_instance_id())
+	var looked := toys.carry_for(rider, 1.0 / 60.0)
+	var after := rider + (carried.get("offset", Vector3.ZERO) as Vector3)
+	var hub := spinner.body.global_position
+	_check(not carried.is_empty() and int(carried["index"]) == spinner.index
+		and is_equal_approx(float(carried["yaw"]), spinner._spin.y / 60.0)
+		and absf(Vector2(after.x - hub.x, after.z - hub.z).length() - 1.0) < 0.001
+		and (carried["offset"] as Vector3).length() > 0.005 and not looked.is_empty(),
+		"a person standing on the turning roundabout is carried round its hub, the same a metre out",
+		str(carried))
+	var off_deck := toys.carry_for(hub + Vector3(2.5, 0.02, 0), 1.0 / 60.0)
+	var on_floor := toys.carry_for(rider, 1.0 / 60.0, floor_body.get_child(0).get_instance_id() if floor_body.get_child_count() > 0 else 1)
+	_check(off_deck.is_empty() and on_floor.is_empty(), "beside it, or on other ground, nobody is carried")
+	# A game already riding props through DotPropCarry gets the roundabout by handing it the box.
+	var prop_carry := DotPropCarry.new()
+	prop_carry.toys = toys
+	var lifted := prop_carry.ride(spinner.body.get_instance_id(), rider, 70.0, 1.0 / 60.0)
+	_check(lifted.is_equal_approx(carried["offset"]), "and DotPropCarry with the toys set carries them the same", str(lifted))
+	prop_carry.free()
+
 	# The swing, pushed at an angle to its bar, swings along its own plane and stays on the bar.
 	var swing := toys.toy(_index(toys, "swing"))
 	var _pushed := toys.use(swing.index, swing.body.global_position + Vector3(0.5, 1.2, 1.0), Vector3(-0.4, -0.2, -1))
@@ -1934,6 +1957,19 @@ func _test_toy_mirror() -> void:
 	_check(heard.has(DotPropToySounds.BOUNCE), "and a ball stopping short on the floor is heard", str(heard))
 	var aimed := toys.aimed(up + Vector3(3, 2, 4), Vector3(0, 0, -1), 4.0)
 	_check(aimed == ball.index, "the use prompt finds a client's toy along the look")
+	# A client's roundabout turns as the server's states say, and its own player standing on it
+	# is carried at the spin measured from them: the spin itself is not sent.
+	var spinner := toys.toy(_index(toys, "merry_go_round"))
+	var hub := spinner.body.global_position
+	for i in range(6):
+		spinner.show_state(hub, Quaternion(Vector3.UP, 0.05 * float(i)), false, 0, 1.0 / 60.0)
+	var measured := spinner.surface_velocity(hub + Vector3(1, 0, 0)).length()
+	var ride := toys.carry_for(hub + Vector3(1.0, 0.02, 0), 1.0 / 60.0)
+	_check(absf(measured - 3.0) < 0.3 and not ride.is_empty() and float(ride["yaw"]) > 0.03,
+		"a client measures the roundabout's spin from the poses it is shown, and carries its rider at it",
+		"%.2f m/s a metre out, %s" % [measured, str(ride)])
+	spinner.show_state(hub, Quaternion(Vector3.UP, 0.25), false, 0, 0.6)
+	_check(toys.carry_for(hub + Vector3(1.0, 0.02, 0), 1.0 / 60.0).is_empty(), "and a pose after a long gap is not a spin")
 	toys.queue_free()
 	floor_body.queue_free()
 	await get_tree().process_frame

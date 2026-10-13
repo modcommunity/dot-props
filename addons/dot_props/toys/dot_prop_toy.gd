@@ -917,13 +917,88 @@ func state_transform() -> Transform3D:
 
 ## A replicated state, on a client: the moving part posed, and what is on and how often it was
 ## used, with the sound and the flourish when that changed.
-func show_state(position_now: Vector3, rotation_now: Quaternion, on_now: bool, count_now: int) -> void:
+##
+## [param delta] is the time since the last state shown, for the spin a roundabout is measured
+## turning at ([method surface_velocity]); left out, the wall clock's.
+func show_state(position_now: Vector3, rotation_now: Quaternion, on_now: bool, count_now: int, delta: float = -1.0) -> void:
 	if body != null and not authoritative:
-		body.global_transform = Transform3D(Basis(rotation_now.normalized()), position_now)
+		var turned := Basis(rotation_now.normalized())
+		if _driven:
+			_measure_spin(turned, delta)
+		body.global_transform = Transform3D(turned, position_now)
 	if on_now != on:
 		on = on_now
 		_show_on()
 	count = count_now
+
+
+## A client's own reading of how fast a driven part is turning (world space, rad/s), from the
+## poses it was shown: the spin itself is the server's and is not sent, and a person carried
+## round a roundabout on a client is carried at this ([method carry]).
+var _shown_spin: Vector3 = Vector3.ZERO
+var _shown_basis: Basis = Basis.IDENTITY
+var _shown_usec: int = -1
+
+
+func _measure_spin(turned: Basis, delta: float) -> void:
+	var now := Time.get_ticks_usec()
+	if _shown_usec < 0:
+		# The first pose: nothing to measure against yet.
+		_shown_usec = now
+		_shown_basis = turned
+		return
+	var dt := delta if delta >= 0.0 else float(now - _shown_usec) / 1000000.0
+	# The same pose twice in one frame (a state, then its interpolation) measures nothing.
+	if dt < 0.0005:
+		return
+	_shown_usec = now
+	var before := _shown_basis
+	_shown_basis = turned
+	if dt > 0.5:
+		_shown_spin = Vector3.ZERO
+		return
+	var change := (turned * before.inverse()).get_rotation_quaternion()
+	var angle := change.get_angle()
+	var w := Vector3.ZERO
+	if angle > 0.00001:
+		if angle > PI:
+			angle -= TAU
+		w = change.get_axis().normalized() * angle / dt
+	# Halfway to each new reading: a frame's jitter in the interpolation is not a lurch.
+	_shown_spin = _shown_spin.lerp(w, 0.5)
+
+
+## How fast the moving part's surface moves at [param point] (world space): what a person
+## standing on a roundabout is carried at. Zero for a toy that does not turn. On a client it is
+## measured from the poses shown.
+func surface_velocity(point: Vector3) -> Vector3:
+	if body == null or not _driven:
+		return Vector3.ZERO
+	return _world_spin().cross(point - _pivot_global())
+
+
+func _world_spin() -> Vector3:
+	return global_basis * _spin if authoritative else _shown_spin
+
+
+## Where a person standing at [param feet] on this roundabout is carried in [param delta]
+## seconds, and how far round they turn: `{offset, yaw}`, or empty when it is not a roundabout
+## turning under them. A rotation about the hub, not the rim's speed along a tangent, which
+## would walk a rider outwards a little every tick until they fell off. Only the roundabout: a
+## see-saw's or a platform's tilt is followed by the motor's own ground snap.
+func carry(feet: Vector3, delta: float) -> Dictionary:
+	if kind != &"spinner" or body == null or delta <= 0.0:
+		return {}
+	var spin := _world_spin().y
+	if absf(spin) < 0.01:
+		return {}
+	var hub := body.global_position
+	var local := feet - hub
+	if Vector2(local.x, local.z).length() > _size.x * 0.5 + 0.1 or absf(local.y) > 0.3:
+		return {}
+	var turn := spin * delta
+	var moved := local.rotated(Vector3.UP, turn)
+	return {"offset": Vector3(moved.x - local.x, 0.0, moved.z - local.z), "yaw": turn}
 
 
 ## Every frame (or tick) on an end that draws: the knock when the moving part stops short, and

@@ -16,6 +16,12 @@ A map lists `{"toy": "<id>", "at": [x, y, z], "yaw": deg}` (plus `links` for a s
 - **Driven** (swing, punching bag, see-saw, wobbly platform, roundabout): an angle or two and a spin about one fixed point, integrated in `DotPropToy._physics_process`, posing a kinematic body. **Not joints**: Godot's own hinge, with a swing pushed at an angle to its bar, sent the seat a thousand kilometres away in half a second, and a pin joint did the same to a bag (2026-10-12, [history](history.md)). An angle cannot leave its pivot and costs no solver iterations. A person's weight on a see-saw or a platform is `stand_on`, a torque about the pivot; a push or a use is `_nudge`, a change of velocity at a point turned into the spins the kind allows.
 - **Fixed** (trampoline, bounce pad, switch, lamp, fountain, horn, bell): static bodies; what changes is `on` and `count`.
 
+## A roundabout carries its riders
+
+A person standing on a turning roundabout goes round with it: `carry_for(feet, delta, ground_id)` is how far the deck moves them this tick and how far it turns them, `{offset, yaw, index}`, a **rotation about the hub** rather than the rim's speed along a tangent (which walks a rider outwards a little each tick until they fall off). The game adds the offset to the person's position after the move, on every end that simulates them, the way it calls `launch_for` before it; turning the view by `yaw` is the game's choice. `ground_id` is the motor's collider underfoot (`DotFpsState.ground_id`), and 0 looks for a deck under the feet instead. A game that already rides props through `DotPropCarry` sets `DotPropCarry.toys` and `ride` does it.
+
+The spin is the server's and is not sent. A client measures it from the poses it is shown (`show_state` takes the time since the last one; the wall clock's when left out), so a predicting client carries its own player at nearly the server's rate and the correction is small. A pose after more than half a second is not a spin. Only the roundabout carries: a see-saw's or a platform's tilt is followed by the motor's own ground snap.
+
 ## Replication: the server's physics, a client's picture
 
 Rigid-body physics is not the same on two machines, so nothing is predicted (the rule [spawning](spawning.md) states for props). On a client every moving part is frozen kinematic and posed from three things a game replicates per toy: `state_transform()` (the moving part's), `on`, and `count`. `show_state` applies them; a client standing on a see-saw stands on the plank the server tipped, an interpolation behind.

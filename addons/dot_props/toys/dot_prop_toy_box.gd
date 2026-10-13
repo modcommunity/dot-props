@@ -14,7 +14,9 @@ extends Node3D
 ## - the collision bits ([member loose_layer] and the rest), from its own layout;
 ## - every tick on the server: [method advance], [method push_from] and [method stand_on] for
 ##   each person, [method use] when the use key goes down on one ([method aimed] finds it);
-## - in its movement code on every end: [method launch_for], for the bouncers and pads;
+## - in its movement code on every end: [method launch_for], for the bouncers and pads, and
+##   [method carry_for] after the move, for a roundabout's riders (or [DotPropCarry] with
+##   [member DotPropCarry.toys] set, which does it for a game already riding props);
 ## - on a client: [member authoritative] false, and [method DotPropToy.show_state] from its own
 ##   replicated entity per toy (the state is [method DotPropToy.state_transform], `on`, `count`);
 ## - [signal sound] into its audio, with [DotPropToySounds]' rows in its catalogue.
@@ -273,6 +275,34 @@ func launch_for(feet: Vector3, velocity: Vector3) -> Dictionary:
 		if out != Vector3.INF:
 			return {"velocity": out, "index": t.index}
 	return {}
+
+
+## A person standing at [param feet] on a turning roundabout this tick: how far it carries them
+## and turns them, `{offset, yaw, index}`, or empty. [param ground_id] is the motor's collider
+## underfoot (`DotFpsState.ground_id`); 0 looks for a roundabout under the feet instead. Both
+## ends, in the movement after the move, like [method launch_for]: a client carries its own
+## player at the spin it measured from the server's poses.
+func carry_for(feet: Vector3, delta: float, ground_id: int = 0) -> Dictionary:
+	if not rules.enabled or toys.is_empty():
+		return {}
+	if ground_id != 0:
+		var t := toy_of(instance_from_id(ground_id))
+		if t == null or t.kind != &"spinner":
+			return {}
+		return _carried(t, feet, delta)
+	for t in toys:
+		if t.kind == &"spinner" and t.global_position.distance_squared_to(feet) < 9.0:
+			var out := _carried(t, feet, delta)
+			if not out.is_empty():
+				return out
+	return {}
+
+
+static func _carried(t: DotPropToy, feet: Vector3, delta: float) -> Dictionary:
+	var out := t.carry(feet, delta)
+	if not out.is_empty():
+		out["index"] = t.index
+	return out
 
 
 ## A person was thrown by toy [param index]: its count goes up, which is what every client hears.

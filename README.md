@@ -210,6 +210,10 @@ if index >= 0:
     toys.use(index, eye, aim)
 # In your movement code, on every end: a trampoline or pad under the feet throws them.
 var thrown := toys.launch_for(feet, velocity)    # {velocity, index} or {}
+# And after the move: a roundabout carries whoever stands on it round with it.
+var carried := toys.carry_for(feet, delta, state.ground_id)   # {offset, yaw, index} or {}
+# When a shot hits something:
+toys.hit(collider, point, direction, impulse)    # a toy's index, or -1 when it was not one
 ```
 
 Replicate each toy by its index with `state_transform()`, `on` and `count`, and call `show_state` with them on a client. Connect `sound` to your audio and add `DotPropToySounds.rows()` to your sound catalogue. `sv_toys 0` removes them, `sv_toys_awake` caps how many simulate at once (24, or 8 in a browser), and `sv_toys_push` sets how hard walking into one pushes it. Add or retune toys with `DotPropToyCatalogue.merge_json`. See [docs/toys.md](docs/toys.md).
