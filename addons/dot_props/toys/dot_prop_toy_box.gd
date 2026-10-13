@@ -409,8 +409,8 @@ static func _shot_mass(t: DotPropToy) -> float:
 
 
 ## A blast at [param at]: every moving toy within [param radius] is pushed away from it, at up to
-## [param speed] m/s at the centre and nothing at the edge, as a toy of up to
-## [constant SHOT_MASS_CAP] kg would be. Server side. How many it moved.
+## [param speed] m/s at the centre and nothing at the edge, whatever it weighs. Server side. How
+## many it moved.
 func blast(at: Vector3, radius: float, speed: float) -> int:
 	if not authoritative or not rules.enabled or radius <= 0.0:
 		return 0
@@ -425,7 +425,9 @@ func blast(at: Vector3, radius: float, speed: float) -> int:
 		var away := (from / dist) if dist > 0.01 else Vector3.UP
 		# Up a little as well, or a blast on the ground slides a ball along it.
 		away = (away + Vector3(0, 0.35, 0)).normalized()
-		var push := speed * (1.0 - dist / radius) * _shot_mass(t)
+		# The whole speed whatever the toy weighs: a blast throws a barrel as it throws a ball,
+		# where a bullet (the mass cap in [method shot]) barely moves one.
+		var push := speed * (1.0 - dist / radius) * maxf(float(t.def.get("mass", 1.0)), 0.25)
 		if push > 0.0 and t.hit(t.body.global_position, away, push):
 			t.touched_at = _now
 			n += 1
