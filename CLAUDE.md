@@ -15,6 +15,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | [docs/tools.md](docs/tools.md) | `DotPropTool`, `DotPhysGun`, `DotGravGun` |
 | [docs/damage-and-carry.md](docs/damage-and-carry.md) | `DotPropDamage`, `DotPropCarry`, any physics assertion |
 | [docs/hunt.md](docs/hunt.md) | `DotPropDisguise`, `DotPropTaunts` |
+| [docs/models.md](docs/models.md) | `DotPropModel`, `DotPropFolder`: a `.glb` and an optional JSON sidecar becoming a prop, and what is refused |
 | [docs/pieces.md](docs/pieces.md) | `DotPropPieces`, a map prop's collision, a game's measuring tool |
 | [docs/toys.md](docs/toys.md) | anything in `toys/`, or a game placing or replicating toys |
 | [docs/history.md](docs/history.md) | the bugs, and how each looked |
@@ -23,7 +24,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 
 | Path | What |
 | --- | --- |
-| `addons/dot_props/core/` | `DotPropDef` (scene, size, mass, cost, entitlement, damage numbers), `DotPropInstance`, `DotPropCatalogue` (the JSON an operator edits), `DotPropLimits` (a layered `DotConfig`), `DotPropPieces` (collision shaped like the model) |
+| `addons/dot_props/core/` | `DotPropDef` (scene, size, mass, cost, entitlement, damage numbers), `DotPropInstance`, `DotPropCatalogue` (the JSON an operator edits), `DotPropLimits` (a layered `DotConfig`), `DotPropPieces` (collision shaped like the model), `DotPropModel` (measure a model into an extent and one convex hull), `DotPropFolder` (a folder of models into a catalogue) |
 | `addons/dot_props/runtime/` | `DotPropSpawner` (the node a game adds), `DotPropDamage`, `DotPropCarry`, `DotPropIO` |
 | `addons/dot_props/hunt/` | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | `addons/dot_props/tools/` | `DotPropTool` (reach, targeting, `may_act_on`), `DotPhysGun`, `DotGravGun` |
@@ -74,7 +75,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 
 | To change | Where |
 | --- | --- |
-| What can be spawned | `DotPropCatalogue`, from JSON |
+| What can be spawned | `DotPropCatalogue`, from JSON, or `DotPropFolder.load_into` for a folder of `.glb` files |
 | What a prop costs against a budget | `DotPropDef.cost` |
 | How many of a kind a player may have | `DotPropDef.limit_group`, `DotPropLimits.group_limits` |
 | Who gets bigger limits | `DotPropSpawner.limit_resolver` |

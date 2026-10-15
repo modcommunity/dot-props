@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 286
+const CHECKS := 298
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 33
+const SECTIONS := 34
 
 var _passed := 0
 var _failed := 0
@@ -75,6 +75,7 @@ func _run() -> void:
 	_test_toy_catalogue()
 	await _test_toys()
 	await _test_toy_mirror()
+	_test_prop_folder()
 
 	print("")
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -2009,4 +2010,58 @@ func _test_toy_mirror() -> void:
 	toys.queue_free()
 	floor_body.queue_free()
 	await get_tree().process_frame
+	_done()
+
+
+## Loose models become props: a folder, a sidecar, a baked manifest, and what is refused.
+func _test_prop_folder() -> void:
+	_section("a folder of models becomes props")
+
+	var dir := "user://props_selftest_folder"
+	DirAccess.make_dir_recursive_absolute(dir)
+
+	# A model made here, so the addon's suite needs no art: a 2 m wide, 1 m tall box.
+	var scene := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	(mesh.mesh as BoxMesh).size = Vector3(2.0, 1.0, 1.0)
+	scene.add_child(mesh)
+	mesh.owner = scene
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	doc.append_from_scene(scene, state)
+	doc.write_to_filesystem(state, dir + "/crate_thing.glb")
+	doc.write_to_filesystem(state, dir + "/Nope Id!.glb")
+	scene.free()
+
+	var side := FileAccess.open(dir + "/crate_thing.json", FileAccess.WRITE)
+	side.store_string('{"name": "Crate thing", "category": "Boxes", "mass": 9, "scale": 2, "icon": "../x.png"}')
+	side.close()
+
+	var catalogue := DotPropCatalogue.new()
+	var res := DotPropFolder.load_into(catalogue, dir, "res://x.tscn")
+	_check(res.ok, "a folder reads", "" if res.ok else res.error.message)
+
+	var def := catalogue.get_prop(&"crate_thing")
+	_check(def != null, "a model becomes a prop named for its file")
+	_check(def != null and def.display_name == "Crate thing" and def.category == &"boxes", "the sidecar names and files it")
+	_check(def != null and is_equal_approx(def.mass, 9.0), "and gives its mass")
+
+	var extent: Array = def.meta["extent"] if def != null else [0, 0, 0]
+	_check(
+		absf(float(extent[0]) - 4.0) < 0.05 and absf(float(extent[1]) - 2.0) < 0.05,
+		"the scale is applied to the measured size, in metres", str(extent)
+	)
+	_check(def != null and def.icon_path == "", "an icon cannot point out of the folder")
+	_check(catalogue.has(&"nope_id"), "an id is made of lower-case words, whatever the file is called")
+
+	var again := DotPropFolder.load_into(catalogue, dir, "res://x.tscn")
+	_check((again.value as Dictionary)["added"].is_empty(), "reading again adds nothing and replaces nothing")
+	_check(DotPropFolder.load_into(catalogue, "user://no_such_folder_here", "res://x.tscn").ok, "a missing folder is not a problem")
+
+	var measured := DotPropModel.measure(dir + "/crate_thing.glb", 1.0, "box")
+	_check(measured.ok and (measured.value as Dictionary)["shape"] is Shape3D, "a model is measured into a shape")
+	_check(not DotPropModel.measure(dir + "/missing.glb", 1.0).ok, "a missing model is an error, not a null")
+	_check(DotPropFolder.sanitize_id("../../a/B c") == "a_b_c", "an id never carries a path")
+
 	_done()

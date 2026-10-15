@@ -17,5 +17,7 @@ extends RefCounted
 #    DotPropCarry.toys (a roundabout carries the people standing on it); DotPropToyBox.shot
 #    shot_along and blast (a hit scan's damage and an explosion turned into a push), a shot
 #    bell rings.
-const LEVEL := 6
+# 7: core/: DotPropModel (a model file as a body's picture, hull and mass) and DotPropFolder
+#    (a folder of .glb/.gltf files, with optional JSON sidecars, becomes catalogue props).
+const LEVEL := 7
 const OLDEST := 1
