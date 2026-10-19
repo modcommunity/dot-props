@@ -43,6 +43,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 
 ## Rules that bite
 
+- **`DotPropCatalogue.follow_content(index, kinds)` adds subscribed Workshop props, solo only, as "Name [Pack]"; the game's own ids win; empty kinds follow nothing; saving leaves them out.** [spawning](docs/spawning.md#workshop-props-follow_content)
 - Props are server-authoritative and never predicted. Every mutating method checks `authoritative` first. [spawning](docs/spawning.md#props-are-server-authoritative-and-are-not-predicted)
 - A definition is checkable without its scene; numbers go on `DotPropDef`, never in a script on the prop (a pack's `class_name` does not resolve). [spawning](docs/spawning.md#a-definition-is-checkable-without-loading-the-scene)
 - `DotPropDef.mass` is assigned before the body enters the tree. [spawning](docs/spawning.md#a-definition-is-checkable-without-loading-the-scene)

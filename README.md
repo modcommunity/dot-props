@@ -43,6 +43,8 @@ spawner.undo(player_id)
 spawner.player_left(player_id)                         # removes their props
 ```
 
+To show a player's subscribed Workshop props in solo, call `spawner.catalogue.follow_content(DotContentIndex.shared())` and rebuild the menu on `content_changed`. Online shows none, the game's own ids win, and a pack prop is listed as "Name [Pack]". See [docs/spawning.md](docs/spawning.md#workshop-props-follow_content).
+
 `props.json`:
 
 ```json

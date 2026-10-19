@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 298
+const CHECKS := 316
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 34
+const SECTIONS := 35
 
 var _passed := 0
 var _failed := 0
@@ -76,6 +76,7 @@ func _run() -> void:
 	await _test_toys()
 	await _test_toy_mirror()
 	_test_prop_folder()
+	_test_workshop_props()
 
 	print("")
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -2064,4 +2065,102 @@ func _test_prop_folder() -> void:
 	_check(not DotPropModel.measure(dir + "/missing.glb", 1.0).ok, "a missing model is an error, not a null")
 	_check(DotPropFolder.sanitize_id("../../a/B c") == "a_b_c", "an id never carries a path")
 
+	_done()
+
+
+func _workshop_pack(cid: String, version: String, prefix: String, ids: Array) -> Dictionary:
+	var entries: Array = []
+	for id in ids:
+		entries.append({"kind": "prop", "id": id, "name": "Pack %s" % id, "scene": "%s.tscn" % id,
+			"category": "pack_stuff", "mass": 5})
+	entries.append({"kind": "weapon", "id": "not_a_prop", "name": "Gun", "def": "gun.tres"})
+	return {
+		"content_id": cid, "version": version, "session": "solo", "source": "subscription",
+		"prefix": prefix,
+		"provides": {"schema": 1, "title": "Alice props", "kinds": ["prop", "weapon"], "entries": entries},
+	}
+
+
+func _test_workshop_props() -> void:
+	_section("Workshop props follow the content index")
+
+	var index := DotContentIndex.new()
+	index.set_session(DotContentIndex.SESSION_SOLO)
+	var catalogue := _catalogue()
+	var own := catalogue.size()
+	var changes := [0]
+	catalogue.content_changed.connect(func() -> void: changes[0] += 1)
+	catalogue.follow_content(index)
+	_check(catalogue.size() == own and changes[0] == 0, "an empty index adds nothing and announces nothing")
+
+	# A def the pack ships, read from a directory standing in for the mount.
+	var dir := "user://ws_props_test"
+	DirAccess.make_dir_recursive_absolute(dir)
+	var shipped := DotPropDef.new()
+	shipped.id = &"ignored_id"
+	shipped.display_name = "Shipped"
+	shipped.scene_path = "res://fixtures/prop_body.tscn"
+	shipped.mass = 7.0
+	ResourceSaver.save(shipped, dir + "/shipped.tres")
+
+	var info := _workshop_pack("alice/props", "1.0.0", dir, ["pack_rock", "crate"])
+	(info["provides"]["entries"] as Array).append(
+		{"kind": "prop", "id": "pack_def", "name": "Def", "def": "shipped.tres"})
+	index.add_pack(info)
+
+	var rock := catalogue.get_prop(&"pack_rock")
+	_check(rock != null and catalogue.size() == own + 2,
+		"a pack mounted afterwards adds its props", "%d props" % catalogue.size())
+	_check(rock != null and rock.display_name == "Pack pack_rock [Alice props]",
+		"a pack prop is listed as Name [Pack]")
+	_check(rock != null and rock.scene_path == dir + "/pack_rock.tscn" and is_equal_approx(rock.mass, 5.0)
+			and rock.category == &"pack_stuff" and rock.content_id == &"alice/props",
+		"it carries the mounted scene path, the entry's numbers and its pack")
+	var made := catalogue.get_prop(&"pack_def")
+	_check(made != null and made.id == &"pack_def" and made.display_name == "Shipped [Alice props]"
+			and is_equal_approx(made.mass, 7.0),
+		"a def entry is loaded and copied, its id taken from the entry")
+	_check(catalogue.get_prop(&"not_a_prop") == null, "a weapon entry is offered to nobody")
+	_check(changes[0] == 1, "one announcement for the arrival", str(changes[0]))
+
+	# Clash: the game's own id wins, and stays the game's through refreshes.
+	var own_crate := catalogue.get_prop(&"crate")
+	_check(not own_crate.meta.has("entry_key"),
+		"a pack prop under an id the game holds does not replace it")
+	catalogue.refresh_content()
+	_check(not catalogue.get_prop(&"crate").meta.has("entry_key"), "and a refresh does not either")
+	catalogue.add(DotPropDef.make(&"pack_rock", "res://fixtures/prop_body.tscn"))
+	catalogue.refresh_content()
+	_check(not catalogue.get_prop(&"pack_rock").meta.has("entry_key"),
+		"an id the game takes over later is the game's, kept by the refresh")
+	var saved := catalogue.to_dictionary()["props"] as Array
+	_check(saved.size() == own + 1 and not str(saved).contains("pack_def"),
+		"saving the catalogue leaves pack rows out", str(saved.size()))
+
+	# Remove: online hides, solo restores.
+	index.set_session(DotContentIndex.SESSION_ONLINE)
+	_check(catalogue.get_prop(&"pack_def") == null and catalogue.size() == own + 1,
+		"online shows no subscribed prop and keeps the game's own", str(catalogue.size()))
+	index.set_session(DotContentIndex.SESSION_SOLO)
+	_check(catalogue.get_prop(&"pack_def") != null, "solo again brings it back")
+	index.tag_pack(&"alice/props", "1.0.0", DotContentIndex.SESSION_ONLINE)
+	index.set_session(DotContentIndex.SESSION_ONLINE)
+	catalogue.refresh_content()
+	_check(catalogue.get_prop(&"pack_def") != null, "a pack the server also requires shows online")
+	index.set_session(DotContentIndex.SESSION_SOLO)
+
+	# A catalogue following nothing, and one that stopped.
+	var none := _catalogue()
+	none.follow_content(index, PackedStringArray())
+	_check(none.size() == own, "empty kinds follow nothing")
+	var fresh := _catalogue().follow_content(index)
+	_check(fresh.get_prop(&"pack_def") != null, "following after the mount sees what is already there")
+	fresh.unfollow_content()
+	_check(fresh.get_prop(&"pack_def") == null and fresh.size() == own, "unfollowing removes the pack rows")
+	index.add_pack(_workshop_pack("carol/late", "1.0.0", dir, ["late_prop"]))
+	_check(fresh.get_prop(&"late_prop") == null and catalogue.get_prop(&"late_prop") != null,
+		"an unfollowed catalogue hears no more, a followed one does")
+
+	DirAccess.remove_absolute(dir + "/shipped.tres")
+	DirAccess.remove_absolute(dir)
 	_done()
