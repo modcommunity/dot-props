@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 316
+const CHECKS := 319
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 35
+const SECTIONS := 36
 
 var _passed := 0
 var _failed := 0
@@ -77,6 +77,7 @@ func _run() -> void:
 	await _test_toy_mirror()
 	_test_prop_folder()
 	_test_workshop_props()
+	_test_clear_cache()
 
 	print("")
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -2079,6 +2080,19 @@ func _workshop_pack(cid: String, version: String, prefix: String, ids: Array) ->
 		"prefix": prefix,
 		"provides": {"schema": 1, "title": "Alice props", "kinds": ["prop", "weapon"], "entries": entries},
 	}
+
+
+func _test_clear_cache() -> void:
+	_section("clear_cache drops the shared materials")
+
+	var first := DotPropToyLook.material(Color.RED)
+	_check(DotPropToyLook.material(Color.RED) == first, "a colour is built once")
+	DotPropToyLook.clear_cache()
+	DotPropModel.clear_cache()
+	_check(DotPropToyLook.material(Color.RED) != first, "after clear_cache it is built again")
+	_check(DotPropToyLook.material(Color.RED) is StandardMaterial3D, "and still usable")
+
+	_done()
 
 
 func _test_workshop_props() -> void:

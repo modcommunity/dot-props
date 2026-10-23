@@ -13,6 +13,11 @@ extends RefCounted
 static var _materials: Dictionary = {}
 
 
+## Drops the shared materials so a headless run exits with none alive; they are rebuilt on use.
+static func clear_cache() -> void:
+	_materials.clear()
+
+
 static func material(colour: Color, rough: float = 0.75, emit: float = 0.0) -> StandardMaterial3D:
 	var key := "%s|%.2f|%.2f" % [colour.to_html(), rough, emit]
 	var made: StandardMaterial3D = _materials.get(key)
