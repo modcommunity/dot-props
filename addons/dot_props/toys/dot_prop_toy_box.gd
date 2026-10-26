@@ -268,18 +268,17 @@ func has_rested(toy: DotPropToy) -> bool:
 ## been nearly still for 0.3 s counts as resting where it is.
 func _lost(t: DotPropToy, delta: float) -> bool:
 	var at := t.body.global_position
-	var slow := t.body.linear_velocity.length_squared() < 0.04
-	var calm: float = (float(_calm.get(t, 0.0)) + delta) if slow else 0.0
-	_calm[t] = calm
-	if calm >= 0.3:
-		_rested[t] = at
 	var rested: Variant = _rested.get(t)
 	var below := at.y < kill_y or not at.is_finite()
-	if fall_limit > 0.0 and rested is Vector3:
-		below = below or at.y < (rested as Vector3).y - fall_limit
-	elif fall_limit > 0.0:
-		below = below or at.y < t.rest.origin.y - fall_limit
+	if fall_limit > 0.0:
+		var floor_y: float = (rested as Vector3).y if rested is Vector3 else t.rest.origin.y
+		below = below or at.y < floor_y - fall_limit
 	if not below:
+		var slow := t.body.linear_velocity.length_squared() < 0.04
+		var calm: float = (float(_calm.get(t, 0.0)) + delta) if slow else 0.0
+		_calm[t] = calm
+		if calm >= 0.3:
+			_rested[t] = at
 		return false
 	lost.emit(t)
 	if not is_instance_valid(t) or toys.find(t) < 0:
