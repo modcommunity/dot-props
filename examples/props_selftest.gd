@@ -13,7 +13,7 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 319
+const CHECKS := 322
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1807,6 +1807,24 @@ func _test_toys() -> void:
 		"a person walking into the beach ball sends it on ahead", "%d pushed, moved %.2f m" % [pushed, ball.body.global_position.x - start.x])
 	var far := toys.push_from(start + Vector3(-6, 0, 0), Vector3(5, 0, 0), 0.35, 1.8)
 	_check(far == 0, "and one walking six metres away does not")
+
+	# A crate added at run time is a loose body: pushed along, put to sleep at rest, removable.
+	toys.sleep_after = 0.5
+	var crate := toys.add_toy(&"crate", Vector3(80, 0.0, -80))
+	await _step_physics(30)
+	var c0 := crate.body.global_position
+	var cpush := toys.push_from(c0 + Vector3(-0.6, -0.5, 0), Vector3(5, 0, 0), 0.35, 1.8)
+	await _step_physics(20)
+	_check(crate != null and cpush >= 1 and crate.body.global_position.x > c0.x + 0.2, "a crate added at run time is pushed along",
+		"%d pushed, moved %.2f m" % [cpush, crate.body.global_position.x - c0.x])
+	for _i in range(300):
+		toys.advance(1.0 / 60.0)
+		await get_tree().physics_frame
+	_check(not crate.awake(), "and sleeps once it has been still for sleep_after seconds", "v %s w %s sleeping %s" % [str(crate.body.linear_velocity), str(crate.body.angular_velocity), str(crate.body.sleeping)])
+	var before_n := toys.count()
+	toys.remove_toy(crate)
+	_check(toys.count() == before_n - 1, "remove_toy takes it out again")
+	toys.sleep_after = 0.0
 
 	# The football kicked along -z.
 	var football := toys.toy(_index(toys, "football"))

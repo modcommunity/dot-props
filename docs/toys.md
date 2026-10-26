@@ -12,7 +12,7 @@ A map lists `{"toy": "<id>", "at": [x, y, z], "yaw": deg}` (plus `links` for a s
 
 ## Three kinds of motion
 
-- **Loose** (ball, pin, barrel, tyre): a real `RigidBody3D`, simulated by the server. On the `loose` layer, which people do not collide with: a person walks into a ball and the game's `push_from` sends it on ahead, faster than the walk, instead of the ball being a wall the controller slides along (a character motor never pushes a rigid body; see [damage-and-carry](damage-and-carry.md)). So a bot can never be stuck on one either.
+- **Loose** (ball, pin, barrel, crate, tyre): a real `RigidBody3D`, simulated by the server. On the `loose` layer, which people do not collide with: a person walks into a ball and the game's `push_from` sends it on ahead, faster than the walk, instead of the ball being a wall the controller slides along (a character motor never pushes a rigid body; see [damage-and-carry](damage-and-carry.md)). So a bot can never be stuck on one either.
 - **Driven** (swing, punching bag, see-saw, wobbly platform, roundabout): an angle or two and a spin about one fixed point, integrated in `DotPropToy._physics_process`, posing a kinematic body. **Not joints**: Godot's own hinge, with a swing pushed at an angle to its bar, sent the seat a thousand kilometres away in half a second, and a pin joint did the same to a bag (2026-10-12, [history](history.md)). An angle cannot leave its pivot and costs no solver iterations. A person's weight on a see-saw or a platform is `stand_on`, a torque about the pivot; a push or a use is `_nudge`, a change of velocity at a point turned into the spins the kind allows.
 - **Fixed** (trampoline, bounce pad, switch, lamp, fountain, horn, bell): static bodies; what changes is `on` and `count`.
 
@@ -56,3 +56,5 @@ A trampoline or a pad throwing a person is `launch_for(feet, velocity)`: a pure 
 ## Testing
 
 `props_selftest` builds every stock toy turned 20 degrees (a toy whose axes are the world's hides bugs), a hundred metres up and clear of what earlier sections left falling, and pushes, kicks, stands on, switches, bounces, caps and resets them; a second box is a client's. `examples/toy_gallery.tscn` renders them all (`--kick` to see them moving). game-hide-n-seek's `headless_net` is the replication check.
+
+`crate` is the toy a game lays at run time for loot or a box: `add_toy(id, at, yaw, def)` builds one (a `def` overrides size and mass) and `remove_toy(toy)` frees it. `sleep_after` (seconds, 0 off) puts an awake toy to sleep once it has lain still that long, so a quiet map simulates nothing.

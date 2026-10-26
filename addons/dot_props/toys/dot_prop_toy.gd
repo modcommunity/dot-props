@@ -57,6 +57,9 @@ var rest: Transform3D = Transform3D.IDENTITY
 ## untouched to sleep first.
 var touched_at: float = -INF
 
+## Seconds the moving part has been at rest while awake, for [member DotPropToyBox.sleep_after].
+var still_for: float = 0.0
+
 ## Collision: loose kinds go on `loose`, everything else (and every fixed part) on `solid`.
 var layers: Dictionary = {}
 
@@ -99,6 +102,7 @@ func build(p_def: Dictionary, p_placement: Dictionary, p_layers: Dictionary) -> 
 		&"ball": _build_ball()
 		&"pin": _build_pin()
 		&"barrel": _build_barrel()
+		&"crate": _build_crate()
 		&"tyre": _build_tyre()
 		&"bag": _build_bag()
 		&"swing": _build_swing()
@@ -265,6 +269,17 @@ func _build_barrel() -> void:
 	for y: float in [-0.32, 0.32]:
 		var _hoop := DotPropToyLook.add(look, DotPropToyLook.torus(r * 0.97, r * 1.04), _mat(1, 0.4), Transform3D(Basis.IDENTITY, Vector3(0, h * y, 0)))
 	var _lid := DotPropToyLook.add(look, DotPropToyLook.cylinder(r * 0.92, 0.01), DotPropToyLook.material(_colour(0).darkened(0.25)), Transform3D(Basis.IDENTITY, Vector3(0, h * 0.5, 0)))
+
+
+func _build_crate() -> void:
+	_radius = maxf(_size.x, _size.z) * 0.5
+	var b := _make_body(Transform3D(Basis.IDENTITY, Vector3(0, _size.y * 0.5, 0)), true)
+	var _s := _shape(b, _box_shape(_size))
+	var look := _look_on(b)
+	if look == null:
+		return
+	var _planks := DotPropToyLook.add(look, DotPropToyLook.box(_size), _mat(0))
+	var _band := DotPropToyLook.add(look, DotPropToyLook.box(Vector3(_size.x + 0.01, _size.y * 0.18, _size.z + 0.01)), _mat(1, 0.9))
 
 
 func _build_tyre() -> void:

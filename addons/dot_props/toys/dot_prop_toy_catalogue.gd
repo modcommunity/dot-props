@@ -27,6 +27,7 @@ extends RefCounted
 ## - `ball`: a loose sphere (beach ball, football, bowling ball).
 ## - `pin`: a loose upright cylinder that topples (a bowling pin).
 ## - `barrel`: a loose upright cylinder that tips and rolls.
+## - `crate`: a loose box that slides when pushed and is thrown by a blast (a game spawns them while it runs, [method DotPropToyBox.add_toy]).
 ## - `tyre`: a loose wheel stood on its tread; it rolls.
 ## - `bag`: a punching bag hung from a frame on a pin joint.
 ## - `swing`: a seat on a rigid pendulum hinged under a frame's bar.
@@ -41,7 +42,7 @@ extends RefCounted
 ## - `horn`: a horn on a post; the use key sounds it.
 ## - `bell`: a bell on a frame; the use key rings it.
 const KINDS: Array[StringName] = [
-	&"ball", &"pin", &"barrel", &"tyre", &"bag", &"swing", &"seesaw", &"spinner", &"wobble",
+	&"ball", &"pin", &"barrel", &"crate", &"tyre", &"bag", &"swing", &"seesaw", &"spinner", &"wobble",
 	&"bouncer", &"pad", &"switch", &"lamp", &"fountain", &"horn", &"bell",
 ]
 
@@ -52,7 +53,7 @@ const MOVING: Array[StringName] = [
 
 ## Kinds nothing collides with but other toys and the world: a person walks into one and it is
 ## pushed ([method DotPropToy.push_from]); never a wall a body or a bot can be stuck on.
-const LOOSE: Array[StringName] = [&"ball", &"pin", &"barrel", &"tyre", &"bag", &"swing"]
+const LOOSE: Array[StringName] = [&"ball", &"pin", &"barrel", &"crate", &"tyre", &"bag", &"swing"]
 
 ## Kinds whose `on` the use key or a switch flips.
 const SWITCHED: Array[StringName] = [&"switch", &"lamp", &"fountain"]
@@ -112,6 +113,12 @@ static func stock() -> DotPropToyCatalogue:
 			"name": "barrel", "kind": "barrel", "size": [0.6, 0.85, 0.6], "mass": 12.0,
 			"bounce": 0.1, "friction": 0.7, "damp": 0.2, "angular_damp": 0.5,
 			"colours": [[0.55, 0.36, 0.2], [0.25, 0.25, 0.28]],
+			"use": "Push", "kick": 4.0, "sound_hit": "toy_wood",
+		},
+		"crate": {
+			"name": "crate", "kind": "crate", "size": [0.5, 0.3, 0.4], "mass": 8.0,
+			"bounce": 0.05, "friction": 0.8, "damp": 0.4, "angular_damp": 0.8,
+			"colours": [[0.5, 0.4, 0.22], [0.25, 0.25, 0.28]],
 			"use": "Push", "kick": 4.0, "sound_hit": "toy_wood",
 		},
 		"tyre": {

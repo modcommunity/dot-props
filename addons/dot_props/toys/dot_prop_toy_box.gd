@@ -62,6 +62,9 @@ var lost_distance: float = 80.0
 
 var toys: Array[DotPropToy] = []
 
+## Seconds at rest after which an awake loose toy is put to sleep (0: the engine's own timer).
+var sleep_after: float = 0.0
+
 ## Placements naming toys this catalogue does not have: left out, listed once.
 var missing: PackedStringArray = PackedStringArray()
 
@@ -142,6 +145,47 @@ func build(placements: Array) -> DotResult:
 const CHANNEL := "dot_props.toys"
 
 
+## Adds one toy of catalogue [param id] at [param at] while the map runs (a loot crate dropped
+## by a zombie). Its index is past the built ones, so a game that pairs toys by index with a
+## client keeps such toys in a box of their own. Null when the id is unknown or the box is not
+## in the tree.
+func add_toy(id: StringName, at: Vector3, yaw: float = 0.0, p_def: Dictionary = {}) -> DotPropToy:
+	if catalogue == null:
+		catalogue = DotPropToyCatalogue.stock()
+	var def := p_def if not p_def.is_empty() else catalogue.get_def(id)
+	if def.is_empty() or not is_inside_tree():
+		return null
+	var placement := {"toy": str(id), "at": [at.x, at.y, at.z], "yaw": yaw}
+	var toy := DotPropToy.new()
+	toy.name = "Toy%d" % toys.size()
+	toy.index = toys.size()
+	toy.authoritative = authoritative
+	toy.draw = draw
+	toy.gravity = gravity
+	toy.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), at)
+	add_child(toy)
+	toy.build(def, placement, {
+		"loose_layer": loose_layer, "loose_mask": loose_mask,
+		"solid_layer": solid_layer, "solid_mask": solid_mask,
+	})
+	var _s := toy.sound.connect(_on_toy_sound)
+	toys.append(toy)
+	return toy
+
+
+## Takes [param toy] out of the box and frees it. The indexes of the toys after it move down.
+func remove_toy(toy: DotPropToy) -> void:
+	var at := toys.find(toy)
+	if at < 0:
+		return
+	toys.remove_at(at)
+	for i in range(at, toys.size()):
+		toys[i].index = i
+	if is_instance_valid(toy):
+		remove_child(toy)
+		toy.queue_free()
+
+
 func clear() -> void:
 	for toy in toys:
 		if is_instance_valid(toy):
@@ -210,6 +254,15 @@ func advance(delta: float) -> void:
 			t.reset()
 			continue
 		if t.awake():
+			if sleep_after > 0.0:
+				var slow := t.body.linear_velocity.length_squared() < 0.0025 and t.body.angular_velocity.length_squared() < 0.01
+				t.still_for = t.still_for + delta if slow else 0.0
+				if t.still_for >= sleep_after:
+					t.still_for = 0.0
+					t.body.linear_velocity = Vector3.ZERO
+					t.body.angular_velocity = Vector3.ZERO
+					t.body.sleeping = true
+					continue
 			awake.append(t)
 	var cap := rules.cap()
 	if awake.size() <= cap:
