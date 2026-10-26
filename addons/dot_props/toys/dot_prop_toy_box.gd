@@ -53,8 +53,20 @@ var aim_mask: int = 0xFFFFFFFF
 ## Gravity a person's weight is under, m/s².
 var gravity: float = 20.0
 
-## Below this a toy is lost and goes home.
+## Below this a toy is lost and [member lost_mode] applies.
 var kill_y: float = -30.0
+
+## What becomes of a lost toy: home (where the map placed it), the last spot it rested at (home
+## when it never rested, as with a toy dropped over a pit), or gone.
+enum LostMode { HOME, LAST_REST, REMOVE }
+var lost_mode: LostMode = LostMode.HOME
+
+## A toy this far below where it last rested is lost too, so a drop over a pit is noticed in a
+## second, not at `kill_y` (0: only `kill_y` counts).
+var fall_limit: float = 0.0
+
+## A toy was lost, before [member lost_mode] is applied; a removal frees it after the handlers.
+signal lost(toy: DotPropToy)
 
 ## Further than this from home, a toy goes home at the next round (and at once when it is
 ## asleep there, so a ball kicked into a corner of the map stays put for the round).
@@ -69,6 +81,8 @@ var sleep_after: float = 0.0
 var missing: PackedStringArray = PackedStringArray()
 
 var _now: float = 0.0
+var _rested: Dictionary = {}
+var _calm: Dictionary = {}
 var _footprints: StaticBody3D = null
 var _rules_connected: bool = false
 
@@ -179,6 +193,8 @@ func remove_toy(toy: DotPropToy) -> void:
 	if at < 0:
 		return
 	toys.remove_at(at)
+	_rested.erase(toy)
+	_calm.erase(toy)
 	for i in range(at, toys.size()):
 		toys[i].index = i
 	if is_instance_valid(toy):
@@ -192,6 +208,8 @@ func clear() -> void:
 			remove_child(toy)
 			toy.queue_free()
 	toys.clear()
+	_rested.clear()
+	_calm.clear()
 	missing.clear()
 	if _footprints != null:
 		remove_child(_footprints)
@@ -241,17 +259,52 @@ func nav_bodies() -> Array:
 
 # --- The server's tick ------------------------------------------------------------
 
+## Whether [param t] is lost this tick, and the lost mode applied to it if so. A toy that has
+## been nearly still for 0.3 s counts as resting where it is.
+func _lost(t: DotPropToy, delta: float) -> bool:
+	var at := t.body.global_position
+	var slow := t.body.linear_velocity.length_squared() < 0.04
+	var calm: float = (float(_calm.get(t, 0.0)) + delta) if slow else 0.0
+	_calm[t] = calm
+	if calm >= 0.3:
+		_rested[t] = at
+	var rested: Variant = _rested.get(t)
+	var below := at.y < kill_y or not at.is_finite()
+	if fall_limit > 0.0 and rested is Vector3:
+		below = below or at.y < (rested as Vector3).y - fall_limit
+	elif fall_limit > 0.0:
+		below = below or at.y < t.rest.origin.y - fall_limit
+	if not below:
+		return false
+	lost.emit(t)
+	if not is_instance_valid(t) or toys.find(t) < 0:
+		return true
+	if lost_mode == LostMode.REMOVE:
+		remove_toy(t)
+		return true
+	_calm.erase(t)
+	if lost_mode == LostMode.LAST_REST and rested is Vector3:
+		var spot := Transform3D(t.rest.basis, rested as Vector3)
+		t.body.linear_velocity = Vector3.ZERO
+		t.body.angular_velocity = Vector3.ZERO
+		PhysicsServer3D.body_set_state(t.body.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, spot)
+		t.body.global_transform = spot
+		t.body.sleeping = true
+	else:
+		t.reset()
+		_rested.erase(t)
+	return true
+
 ## One tick on the server: the clock, the lost toys sent home, and the awake cap.
 func advance(delta: float) -> void:
 	_now += delta
 	if not authoritative or not rules.enabled:
 		return
 	var awake: Array[DotPropToy] = []
-	for t in toys:
-		if t.body == null:
+	for t: DotPropToy in toys.duplicate():
+		if not is_instance_valid(t) or t.body == null:
 			continue
-		if t.body.global_position.y < kill_y:
-			t.reset()
+		if _lost(t, delta):
 			continue
 		if t.awake():
 			if sleep_after > 0.0:

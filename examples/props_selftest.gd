@@ -13,7 +13,7 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 322
+const CHECKS := 323
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
@@ -1825,6 +1825,21 @@ func _test_toys() -> void:
 	toys.remove_toy(crate)
 	_check(toys.count() == before_n - 1, "remove_toy takes it out again")
 	toys.sleep_after = 0.0
+
+	# A drop over a pit (past the floor's edge) is lost after fall_limit metres, not at kill_y.
+	var lost_seen := [0]
+	var _lc := toys.lost.connect(func(_t: DotPropToy) -> void: lost_seen[0] += 1)
+	toys.fall_limit = 4.0
+	toys.lost_mode = DotPropToyBox.LostMode.REMOVE
+	var pit := toys.add_toy(&"crate", Vector3(150, 1.0, 0.0))
+	var n_pit := toys.count()
+	for _i in range(240):
+		toys.advance(1.0 / 60.0)
+		await get_tree().physics_frame
+	_check(lost_seen[0] == 1 and toys.count() == n_pit - 1 and not toys.toys.has(pit),
+		"a crate dropped over a pit is lost after fall_limit and removed (LostMode.REMOVE)", "%d lost, %d toys of %d" % [lost_seen[0], toys.count(), n_pit])
+	toys.lost_mode = DotPropToyBox.LostMode.HOME
+	toys.fall_limit = 0.0
 
 	# The football kicked along -z.
 	var football := toys.toy(_index(toys, "football"))
