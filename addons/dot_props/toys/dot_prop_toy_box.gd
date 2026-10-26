@@ -259,6 +259,11 @@ func nav_bodies() -> Array:
 
 # --- The server's tick ------------------------------------------------------------
 
+## Whether [param toy] has lain still anywhere since it was added (a drop over a pit has not).
+func has_rested(toy: DotPropToy) -> bool:
+	return _rested.has(toy)
+
+
 ## Whether [param t] is lost this tick, and the lost mode applied to it if so. A toy that has
 ## been nearly still for 0.3 s counts as resting where it is.
 func _lost(t: DotPropToy, delta: float) -> bool:
