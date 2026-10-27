@@ -63,6 +63,9 @@ var still_for: float = 0.0
 ## Collision: loose kinds go on `loose`, everything else (and every fixed part) on `solid`.
 var layers: Dictionary = {}
 
+## Whether a person can push this kind at all (a loose kind or a roundabout); the box skips the rest.
+var pushable: bool = false
+
 var _size: Vector3 = Vector3.ONE
 var _radius: float = 0.25
 ## Where on the moving part a knock is heard from (a see-saw's end, not its pivot).
@@ -116,6 +119,7 @@ func build(p_def: Dictionary, p_placement: Dictionary, p_layers: Dictionary) -> 
 		&"fountain": _build_fountain()
 		&"horn": _build_horn()
 		&"bell": _build_bell()
+	pushable = kind == &"spinner" or DotPropToyCatalogue.LOOSE.has(kind)
 
 	if body != null:
 		rest = body.global_transform

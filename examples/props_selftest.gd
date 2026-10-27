@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 337
+const CHECKS := 340
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 39
+const SECTIONS := 40
 
 var _passed := 0
 var _failed := 0
@@ -74,6 +74,7 @@ func _run() -> void:
 	_test_pieces()
 	_test_toy_catalogue()
 	await _test_toys()
+	await _test_toys_prefilter()
 	await _test_toy_mirror()
 	await _test_rolling()
 	await _test_tyre_rest()
@@ -1785,6 +1786,82 @@ func _index(toys: DotPropToyBox, id: String) -> int:
 func _step_physics(frames: int) -> void:
 	for _i in range(frames):
 		await get_tree().physics_frame
+
+
+func _scatter_box(count: int) -> Array:
+	var made := _toy_world(true)
+	var toys: DotPropToyBox = made[1]
+	toys.clear()
+	var ids := toys.catalogue.ids()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	for i in range(count):
+		var _t := toys.add_toy(StringName(ids[i % ids.size()]), Vector3(rng.randf_range(-90, 90), 0.5, rng.randf_range(-90, 90)))
+	return made
+
+
+func _test_toys_prefilter() -> void:
+	_section("toy box push_from: the prefilter gives the unfiltered result, and is faster")
+	var made_a := _scatter_box(300)
+	var made_b := _scatter_box(300)
+	# Far apart, or the two boxes' toys collide with each other.
+	(made_b[0] as Node3D).position.x = 1000.0
+	var a: DotPropToyBox = made_a[1]
+	var b: DotPropToyBox = made_b[1]
+	await _step_physics(30)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var movers: Array[DotPropToy] = []
+	for t in a.toys:
+		if t.pushable and t.body != null:
+			movers.append(t)
+	var feet: Array[Vector3] = []
+	var vel: Array[Vector3] = []
+	for i in range(100):
+		var at := movers[rng.randi() % movers.size()].body.global_position if i % 2 == 0 else Vector3(rng.randf_range(-95, 95), 100, rng.randf_range(-95, 95))
+		feet.append(Vector3(at.x + rng.randf_range(-0.5, 0.5), 100.0, at.z + rng.randf_range(-0.5, 0.5)))
+		vel.append(Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-6, 6)))
+	var same := true
+	var why := ""
+	var pushed := 0
+	for i in range(100):
+		var na := a.push_from(feet[i], vel[i], 0.35, 1.8)
+		var nb := b.push_from_unfiltered(feet[i] + Vector3(1000, 0, 0), vel[i], 0.35, 1.8)
+		pushed += na
+		if na != nb:
+			why += "count %d: %d vs %d; " % [i, na, nb]
+		same = same and na == nb
+	for i in range(a.count()):
+		var ta := a.toys[i]
+		var tb := b.toys[i]
+		if ta.body == null:
+			continue
+		# Which toys were pushed, not their velocities: two physics worlds settle a hair apart.
+		if ta.touched_at != tb.touched_at:
+			why += "toy %d %s; " % [i, ta.kind]
+		same = same and ta.touched_at == tb.touched_at
+	_check(same and pushed > 0, "100 players over 300 toys: the same count and the same toys moved as the unfiltered path", "%d pushes %s" % [pushed, why.left(300)])
+	for _i in range(120):
+		a.advance(1.0 / 60.0)
+		await get_tree().physics_frame
+	var asleep := 0
+	for t in a.toys:
+		if t.body != null and t.body.sleeping:
+			asleep += 1
+	_check(a.count() == 300 and asleep > 0, "advance over settled sleepers keeps every toy and sleeps some", "%d asleep of %d" % [asleep, a.count()])
+	var t0 := Time.get_ticks_usec()
+	for i in range(100):
+		var _n := a.push_from(feet[i], vel[i], 0.35, 1.8)
+	var filtered := Time.get_ticks_usec() - t0
+	t0 = Time.get_ticks_usec()
+	for i in range(100):
+		var _n := a.push_from_unfiltered(feet[i], vel[i], 0.35, 1.8)
+	var plain := Time.get_ticks_usec() - t0
+	print("BENCH push_from 100 players x 300 toys: filtered %.2f ms, unfiltered %.2f ms (%.2fx)" % [filtered / 1000.0, plain / 1000.0, plain / maxf(filtered, 1.0)])
+	_check(filtered <= plain * 1.25, "the prefiltered push_from is not slower than the unfiltered one (timing noise allowed)", "%d us vs %d us" % [filtered, plain])
+	made_a[0].queue_free()
+	made_b[0].queue_free()
+	_done()
 
 
 func _test_toys() -> void:

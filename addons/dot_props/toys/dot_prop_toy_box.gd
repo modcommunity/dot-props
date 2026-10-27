@@ -299,6 +299,15 @@ func _lost(t: DotPropToy, delta: float) -> bool:
 		_rested.erase(t)
 	return true
 
+## Whether [param t] sleeps where it was recorded at rest, so _lost and the awake cap would do
+## nothing for it this tick.
+func _settled(t: DotPropToy) -> bool:
+	if t._driven or float(_calm.get(t, 0.0)) < 0.3:
+		return false
+	var at := t.body.global_position
+	return at.y >= kill_y and _rested.get(t) == at
+
+
 ## One tick on the server: the clock, the lost toys sent home, and the awake cap.
 func advance(delta: float) -> void:
 	_now += delta
@@ -307,6 +316,8 @@ func advance(delta: float) -> void:
 	var awake: Array[DotPropToy] = []
 	for t: DotPropToy in toys.duplicate():
 		if not is_instance_valid(t) or t.body == null:
+			continue
+		if t.body.sleeping and _settled(t):
 			continue
 		if _lost(t, delta):
 			continue
@@ -349,6 +360,29 @@ func awake_count() -> int:
 ## A person's capsule this tick: whatever loose toy it walks into is pushed, a roundabout's rim
 ## turned. Server side. Returns how many it moved.
 func push_from(feet: Vector3, velocity: Vector3, radius: float, height: float) -> int:
+	if not authoritative or not rules.enabled:
+		return 0
+	var n := 0
+	var push_scale := rules.push_scale
+	# The same test as _near, inlined: one call per toy per player per tick is the cost at 100 players.
+	for t in toys:
+		if not t.pushable or t.body == null:
+			continue
+		var reach := 4.0 + t._radius
+		var r2 := reach * reach
+		var d := t.global_position - feet
+		if d.length_squared() >= r2:
+			d = t.body.global_position - feet
+			if d.length_squared() >= r2:
+				continue
+		if t.push_from(feet, velocity, radius, height, push_scale):
+			t.touched_at = _now
+			n += 1
+	return n
+
+
+## [method push_from] without the prefilter, the reference the suite compares it with.
+func push_from_unfiltered(feet: Vector3, velocity: Vector3, radius: float, height: float) -> int:
 	if not authoritative or not rules.enabled:
 		return 0
 	var n := 0
