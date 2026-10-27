@@ -119,6 +119,9 @@ func build(p_def: Dictionary, p_placement: Dictionary, p_layers: Dictionary) -> 
 
 	if body != null:
 		rest = body.global_transform
+		if kind == &"tyre" and authoritative and not _driven:
+			# A map hangs a stood wheel a little above its floor; dropped, it tips and rolls away.
+			get_tree().physics_frame.connect(_sleep_at_start, CONNECT_ONE_SHOT)
 		if not authoritative and not _driven:
 			# Drawn, never simulated: posed from snapshots, still something to stand on.
 			body.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
@@ -916,6 +919,25 @@ func reset() -> void:
 	body.angular_velocity = Vector3.ZERO
 	PhysicsServer3D.body_set_state(body.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, rest)
 	body.global_transform = rest
+	body.sleeping = true
+
+
+func _sleep_at_start() -> void:
+	if body == null or not is_instance_valid(body) or not body.is_inside_tree():
+		return
+	# Jolt wakes a sleeper with nothing under it, so the wheel is lowered onto the floor first.
+	var from := body.global_position
+	var query := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * (_radius + 0.5), body.collision_mask & ~body.collision_layer)
+	query.exclude = [body.get_rid()]
+	var hit := body.get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty():
+		var spot := body.global_transform
+		spot.origin.y = float((hit["position"] as Vector3).y) + _radius * 0.97
+		PhysicsServer3D.body_set_state(body.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, spot)
+		body.global_transform = spot
+		rest = spot
+	body.linear_velocity = Vector3.ZERO
+	body.angular_velocity = Vector3.ZERO
 	body.sleeping = true
 
 

@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 334
+const CHECKS := 337
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 38
+const SECTIONS := 39
 
 var _passed := 0
 var _failed := 0
@@ -76,6 +76,7 @@ func _run() -> void:
 	await _test_toys()
 	await _test_toy_mirror()
 	await _test_rolling()
+	await _test_tyre_rest()
 	_test_prop_folder()
 	_test_workshop_props()
 	_test_ledge()
@@ -2075,6 +2076,46 @@ func _test_rolling() -> void:
 	ball.body.linear_velocity = Vector3(9.0, 0, 0)
 	var far := [{"id": &"p2", "position": ball.body.global_position - Vector3(0, 0.2, 0), "radius": 0.35, "height": 1.8}]
 	_check(rule.scan(toys, far, 0.1).is_empty(), "a beach ball at speed hurts nobody: only barrels, crates and tyres do")
+	toys.queue_free()
+	floor_body.queue_free()
+	await get_tree().process_frame
+	_done()
+
+
+## A tyre a map hangs a hand above its floor is lowered onto it and then stays still until touched.
+func _test_tyre_rest() -> void:
+	_section("a placed tyre on flat ground stays put until touched")
+	var holder := Node3D.new()
+	holder.position = Vector3(0, 100, 0)
+	_world.add_child(holder)
+	var floor_body := StaticBody3D.new()
+	floor_body.collision_layer = 1
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(50, 1, 50)
+	shape.shape = box
+	shape.position = Vector3(0, -0.5, 0)
+	floor_body.add_child(shape)
+	holder.add_child(floor_body)
+	var toys := DotPropToyBox.new()
+	toys.authoritative = true
+	toys.loose_layer = 2
+	toys.loose_mask = 1 | 2 | 4
+	toys.solid_layer = 4
+	toys.solid_mask = 1 | 2
+	toys.footprint_layer = 8
+	holder.add_child(toys)
+	toys.catalogue = DotPropToyCatalogue.stock()
+	var built := toys.build([{"toy": "tyre", "at": [3.0, 0.275, 2.0]}, {"toy": "tyre", "at": [6.0, 0.0, 2.0], "yaw": 30}])
+	_check(built.ok and toys.count() == 2, "two tyres built", str(built.ok))
+	await _step_physics(2)
+	var starts: Array[Vector3] = []
+	for t in toys.toys:
+		starts.append(t.body.global_position)
+	await _step_physics(180)
+	for i in toys.toys.size():
+		var moved: float = toys.toys[i].body.global_position.distance_to(starts[i])
+		_check(moved < 0.05, "tyre %d moves %.3f m in three seconds (limit 0.05)" % [i, moved])
 	toys.queue_free()
 	floor_body.queue_free()
 	await get_tree().process_frame
