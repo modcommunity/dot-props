@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 323
+const CHECKS := 330
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 36
+const SECTIONS := 37
 
 var _passed := 0
 var _failed := 0
@@ -75,6 +75,7 @@ func _run() -> void:
 	_test_toy_catalogue()
 	await _test_toys()
 	await _test_toy_mirror()
+	await _test_rolling()
 	_test_prop_folder()
 	_test_workshop_props()
 	_test_clear_cache()
@@ -2042,6 +2043,37 @@ func _test_toy_mirror() -> void:
 		"%.2f m/s a metre out, %s" % [measured, str(ride)])
 	spinner.show_state(hub, Quaternion(Vector3.UP, 0.25), false, 0, 0.6)
 	_check(toys.carry_for(hub + Vector3(1.0, 0.02, 0), 1.0 / 60.0).is_empty(), "and a pose after a long gap is not a spin")
+	toys.queue_free()
+	floor_body.queue_free()
+	await get_tree().process_frame
+	_done()
+
+
+## A barrel that rolls hurts, a nudged one does not, and one toy hurts one person once per cooldown.
+func _test_rolling() -> void:
+	_section("rolling: a fast barrel hurts a person it touches, a slow one and a ball do not")
+	var made := _toy_world(true)
+	var floor_body: Node3D = made[0]
+	var toys: DotPropToyBox = made[1]
+	var barrel: DotPropToy = toys.toys[_index(toys, "barrel")]
+	var ball: DotPropToy = toys.toys[_index(toys, "beach_ball")]
+	await _step_physics(60)
+	var rule := DotPropRolling.new()
+	var at := barrel.body.global_position
+	var victims := [{"id": &"p1", "position": Vector3(at.x, at.y - 0.4, at.z), "radius": 0.35, "height": 1.8}]
+	_check(rule.scan(toys, victims, 0.1).is_empty(), "a barrel standing still hurts nobody")
+	barrel.body.linear_velocity = Vector3(1.5, 0, 0)
+	_check(rule.scan(toys, victims, 0.1).is_empty(), "a barrel pushed along at a walk hurts nobody", str(rule.min_speed))
+	barrel.body.sleeping = false
+	barrel.body.linear_velocity = Vector3(7.0, 0, 0)
+	var hit := rule.scan(toys, victims, 0.1)
+	_check(hit.size() == 1 and hit[0]["victim"] == &"p1" and float(hit[0]["damage"]) > 5.0, "a barrel at 7 m/s hurts the person it is on", str(hit.size()))
+	_check(rule.scan(toys, victims, 0.1).is_empty(), "the same barrel does not hit the same person again inside the cooldown")
+	_check(not rule.scan(toys, victims, 1.0).is_empty(), "and does once the cooldown has passed")
+	_check(rule.damage_for(40.0, 12.0) <= rule.max_damage and rule.damage_for(2.0, 12.0) == 0.0, "damage is capped and zero under the minimum speed")
+	ball.body.linear_velocity = Vector3(9.0, 0, 0)
+	var far := [{"id": &"p2", "position": ball.body.global_position - Vector3(0, 0.2, 0), "radius": 0.35, "height": 1.8}]
+	_check(rule.scan(toys, far, 0.1).is_empty(), "a beach ball at speed hurts nobody: only barrels, crates and tyres do")
 	toys.queue_free()
 	floor_body.queue_free()
 	await get_tree().process_frame

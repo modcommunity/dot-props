@@ -139,6 +139,11 @@ func _mat(i: int, rough: float = 0.75) -> StandardMaterial3D:
 
 ## The moving part: a rigid body at [param at] (this toy's frame), on the loose or the solid
 ## layer, its mass and material from the definition before it enters the tree.
+## Half the toy's width: how far from its middle it can touch.
+func radius() -> float:
+	return _radius
+
+
 func _make_body(at: Transform3D, loose: bool) -> RigidBody3D:
 	var b := RigidBody3D.new()
 	b.name = "Body"
