@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 330
+const CHECKS := 334
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 37
+const SECTIONS := 38
 
 var _passed := 0
 var _failed := 0
@@ -78,6 +78,7 @@ func _run() -> void:
 	await _test_rolling()
 	_test_prop_folder()
 	_test_workshop_props()
+	_test_ledge()
 	_test_clear_cache()
 
 	print("")
@@ -2242,4 +2243,29 @@ func _test_workshop_props() -> void:
 
 	DirAccess.remove_absolute(dir + "/shipped.tres")
 	DirAccess.remove_absolute(dir)
+	_done()
+
+
+func _test_ledge() -> void:
+	_section("ledge")
+	var material := StandardMaterial3D.new()
+	var right := DotPropLedge.make(8.0, 3.0, 20.0, 3.5, 1.0, 7, material)
+	var left := DotPropLedge.make(8.0, 3.0, 20.0, 3.5, -1.0, 7, material)
+	var points: PackedVector3Array = ((right.get_child(0) as CollisionShape3D).shape as ConvexPolygonShape3D).points
+	var lo := INF
+	for p: Vector3 in points:
+		lo = minf(lo, p.x)
+	_check(is_equal_approx(lo, 1.0) and is_equal_approx(DotPropLedge.clear_width(8.0, 3.0), 5.0),
+		"a right ledge's face is 3 m in from the edge, leaving 5 m", "face at x=%.2f" % lo)
+	var hi := -INF
+	for p: Vector3 in ((left.get_child(0) as CollisionShape3D).shape as ConvexPolygonShape3D).points:
+		hi = maxf(hi, p.x)
+	_check(is_equal_approx(hi, -1.0), "a left one mirrors it", "face at x=%.2f" % hi)
+	var span := 0.0
+	for p: Vector3 in points:
+		span = maxf(span, absf(p.z))
+	_check(is_equal_approx(span, 10.0) and right.get_child_count() == left.get_child_count(), "it is as long as asked and the same on both sides", str(span))
+	_check(right.collision_layer == 1 and right.side == 1.0 and left.side == -1.0, "it is solid on the layers it was given")
+	right.free()
+	left.free()
 	_done()

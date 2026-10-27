@@ -25,7 +25,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | Path | What |
 | --- | --- |
 | `addons/dot_props/core/` | `DotPropDef` (scene, size, mass, cost, entitlement, damage numbers), `DotPropInstance`, `DotPropCatalogue` (the JSON an operator edits), `DotPropLimits` (a layered `DotConfig`), `DotPropPieces` (collision shaped like the model), `DotPropModel` (measure a model into an extent and one convex hull), `DotPropFolder` (a folder of models into a catalogue) |
-| `addons/dot_props/runtime/` | `DotPropSpawner` (the node a game adds), `DotPropDamage`, `DotPropCarry`, `DotPropIO` |
+| `addons/dot_props/runtime/` | `DotPropSpawner` (the node a game adds), `DotPropDamage`, `DotPropCarry`, `DotPropIO`; road hazards `DotPropBridge` (a deck that sags and falls, with a mirror mode), `DotPropRubble`, `DotPropLedge` (a rock outcrop pinching a road to a ledge) |
 | `addons/dot_props/hunt/` | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | `addons/dot_props/tools/` | `DotPropTool` (reach, targeting, `may_act_on`), `DotPhysGun`, `DotGravGun` |
 | `addons/dot_props/toys/` | `DotPropToyCatalogue` (18 stock toys over 16 kinds, retuned from JSON), `DotPropToyBox` (a map's toys, the awake cap, push/stand/use/hit/launch), `DotPropToy` (one, its bodies and look), `DotPropToyRules` (`sv_toys*`), `DotPropToySounds` (+ `sounds/`, CC0), `DotPropToyLook` (meshes made in code) |
