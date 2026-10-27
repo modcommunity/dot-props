@@ -30,6 +30,10 @@ enum State { INTACT, COLLAPSED }
 
 var state: State = State.INTACT
 var sag: float = 0.0
+## A mirror of a deck simulated elsewhere: [method step] only draws, [method apply_remote] says
+## what the authority reports. Nothing here decides a collapse or a rebuild.
+var remote: bool = false
+var _remote_sag: float = 0.0
 
 var _deck: AnimatableBody3D = null
 var _rest := Transform3D.IDENTITY
@@ -87,6 +91,9 @@ func report(value: float) -> void:
 func step(delta: float) -> void:
 	if _deck == null:
 		return
+	if remote:
+		_step_remote(delta)
+		return
 	if state == State.COLLAPSED:
 		_down += delta
 		_fall += delta
@@ -106,6 +113,27 @@ func step(delta: float) -> void:
 	_peak = 0.0
 	if _over >= hold:
 		_collapse()
+
+
+## Mirror side: the authority says the deck is down or standing and how far it has sagged.
+## Turns [member remote] on, so the first report is the last time this deck decides anything.
+func apply_remote(down: bool, sag_depth: float) -> void:
+	remote = true
+	_remote_sag = clampf(sag_depth, 0.0, sag_max)
+	if down and state == State.INTACT:
+		_collapse()
+	elif not down and state == State.COLLAPSED:
+		_stand()
+
+
+func _step_remote(delta: float) -> void:
+	if state == State.COLLAPSED:
+		_fall += delta
+		var drop := minf(_fall * _fall * 4.0, 12.0)
+		_deck.global_transform = Transform3D(_rest.basis.rotated(_rest.basis.z, minf(_fall * 0.4, 0.6)), _rest.origin - Vector3(0.0, drop, 0.0))
+		return
+	sag = move_toward(sag, _remote_sag, delta * 0.6)
+	_deck.global_transform = Transform3D(_rest.basis, _rest.origin - Vector3(0.0, sag, 0.0))
 
 
 ## Brings the deck down now.
