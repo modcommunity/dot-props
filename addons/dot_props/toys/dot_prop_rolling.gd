@@ -29,8 +29,11 @@ func scan(box: DotPropToyBox, victims: Array, delta: float) -> Array[Dictionary]
 	var out: Array[Dictionary] = []
 	if box == null or victims.is_empty():
 		return out
-	for toy: DotPropToy in box.toys:
-		if not is_instance_valid(toy) or toy.body == null or not toy.body.is_inside_tree() or not kinds.has(toy.kind):
+	for node: Variant in box.toys:
+		if not is_instance_valid(node):
+			continue
+		var toy: DotPropToy = node
+		if toy.body == null or not toy.body.is_inside_tree() or not kinds.has(toy.kind):
 			continue
 		var speed := toy.body.linear_velocity.length()
 		if speed < min_speed:

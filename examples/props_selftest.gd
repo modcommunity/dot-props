@@ -13,13 +13,13 @@ extends Node
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 340
+const CHECKS := 344
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 40
+const SECTIONS := 41
 
 var _passed := 0
 var _failed := 0
@@ -76,6 +76,7 @@ func _run() -> void:
 	await _test_toys()
 	await _test_toys_prefilter()
 	await _test_toy_mirror()
+	await _test_toys_freed()
 	await _test_rolling()
 	await _test_tyre_rest()
 	_test_prop_folder()
@@ -2083,6 +2084,43 @@ func _test_toys() -> void:
 	_done()
 
 
+## A toy freed outside the box (its holder freed, a game's cleanup) leaves a dead entry in `toys`.
+func _test_toys_freed() -> void:
+	_section("a toy freed behind the box's back does not break the box")
+	var made := _toy_world(true)
+	var toys: DotPropToyBox = made[1]
+	var total := toys.count()
+	var live_index := 2
+	for i in [0, 1, total - 1]:
+		toys.toy(i).free()
+	var catcher := ErrorCatcher.new()
+	OS.add_logger(catcher)
+	var feet := Vector3(0, 100, 0)
+	var _a := toys.awake_count()
+	toys.advance(0.1)
+	var _b := toys.push_from(feet, Vector3.FORWARD, 0.4, 1.8)
+	var _c := toys.push_from_unfiltered(feet, Vector3.FORWARD, 0.4, 1.8)
+	var _d := toys.stand_on(feet, 80.0)
+	var _e := toys.launch_for(feet, Vector3.DOWN)
+	var _f := toys.carry_for(feet, 0.1)
+	var _g := toys.blast(feet, 50.0, 5.0)
+	var _h := toys.toy(0)
+	var _i := toys.describe()
+	var _j := toys.describe_lines()
+	toys.launched(0)
+	var _k := toys.use(0, feet, Vector3.FORWARD)
+	toys._on_rules_changed()
+	toys.reset()
+	await _step_physics(2)
+	OS.remove_logger(catcher)
+	_check(catcher.errors.is_empty(), "every public method skips the freed toys without an engine error", "; ".join(catcher.errors.slice(0, 2)))
+	_check(toys.toy(0) == null and toys.toy(live_index) != null, "toy(i) hands back null for a freed one and the toy for a live one")
+	_check(toys.describe_lines().size() == total - 3, "the listing leaves the freed toys out", str(toys.describe_lines().size()))
+	_check(toys.count() == total, "the live toys keep their indexes", str(toys.count()))
+	made[0].free()
+	_done()
+
+
 func _test_toy_mirror() -> void:
 	_section("toys on a client: frozen, posed from the server's state, heard when they change")
 	var made := _toy_world(false)
@@ -2388,3 +2426,13 @@ func _test_ledge() -> void:
 	right.free()
 	left.free()
 	_done()
+
+
+## An unguarded call on a freed node can still return a plausible value, so only the error shows it.
+class ErrorCatcher extends Logger:
+	var errors: Array[String] = []
+
+	func _log_error(function: String, _file: String, _line: int, code: String,
+			rationale: String, _editor_notify: bool, _error_type: int,
+			_script_backtraces: Array) -> void:
+		errors.append("%s %s %s" % [code, rationale, function])

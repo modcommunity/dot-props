@@ -196,7 +196,8 @@ func remove_toy(toy: DotPropToy) -> void:
 	_rested.erase(toy)
 	_calm.erase(toy)
 	for i in range(at, toys.size()):
-		toys[i].index = i
+		if is_instance_valid(toys[i]):
+			toys[i].index = i
 	if is_instance_valid(toy):
 		remove_child(toy)
 		toy.queue_free()
@@ -222,7 +223,9 @@ func count() -> int:
 
 
 func toy(index: int) -> DotPropToy:
-	return toys[index] if index >= 0 and index < toys.size() else null
+	if index < 0 or index >= toys.size() or not is_instance_valid(toys[index]):
+		return null
+	return toys[index]
 
 
 func _build_footprints() -> void:
@@ -238,6 +241,8 @@ func _build_footprints() -> void:
 	_footprints.process_mode = Node.PROCESS_MODE_DISABLED
 	add_child(_footprints)
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		var box := t.footprint()
 		if box.size == Vector3.ZERO:
 			continue
@@ -314,8 +319,11 @@ func advance(delta: float) -> void:
 	if not authoritative or not rules.enabled:
 		return
 	var awake: Array[DotPropToy] = []
-	for t: DotPropToy in toys.duplicate():
-		if not is_instance_valid(t) or t.body == null:
+	for node: Variant in toys.duplicate():
+		if not is_instance_valid(node):
+			continue
+		var t: DotPropToy = node
+		if t.body == null:
 			continue
 		if t.body.sleeping and _settled(t):
 			continue
@@ -352,6 +360,8 @@ func advance(delta: float) -> void:
 func awake_count() -> int:
 	var n := 0
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		if t.awake():
 			n += 1
 	return n
@@ -366,6 +376,8 @@ func push_from(feet: Vector3, velocity: Vector3, radius: float, height: float) -
 	var push_scale := rules.push_scale
 	# The same test as _near, inlined: one call per toy per player per tick is the cost at 100 players.
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		if not t.pushable or t.body == null:
 			continue
 		var reach := 4.0 + t._radius
@@ -387,6 +399,8 @@ func push_from_unfiltered(feet: Vector3, velocity: Vector3, radius: float, heigh
 		return 0
 	var n := 0
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		if t.body != null and _near(t, feet, 4.0) and t.push_from(feet, velocity, radius, height, rules.push_scale):
 			t.touched_at = _now
 			n += 1
@@ -399,6 +413,8 @@ func stand_on(feet: Vector3, mass: float) -> int:
 		return 0
 	var n := 0
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		if t.body != null and _near(t, feet, 3.0) and t.stand_on(feet, mass, gravity):
 			t.touched_at = _now
 			n += 1
@@ -416,6 +432,8 @@ func launch_for(feet: Vector3, velocity: Vector3) -> Dictionary:
 	if not rules.enabled:
 		return {}
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		if t.kind != &"bouncer" and t.kind != &"pad":
 			continue
 		if t.global_position.distance_squared_to(feet) > 9.0:
@@ -440,6 +458,8 @@ func carry_for(feet: Vector3, delta: float, ground_id: int = 0) -> Dictionary:
 			return {}
 		return _carried(t, feet, delta)
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		if t.kind == &"spinner" and t.global_position.distance_squared_to(feet) < 9.0:
 			var out := _carried(t, feet, delta)
 			if not out.is_empty():
@@ -560,6 +580,8 @@ func blast(at: Vector3, radius: float, speed: float) -> int:
 		return 0
 	var n := 0
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		if t.body == null:
 			continue
 		var from := t.body.global_position - at
@@ -586,6 +608,8 @@ func _flip(index: int) -> Variant:
 ## Every toy home, still and asleep: a round's start. Server side.
 func reset() -> void:
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		t.reset()
 
 
@@ -594,13 +618,15 @@ func reset() -> void:
 func _physics_process(delta: float) -> void:
 	if draw and authoritative and rules.enabled:
 		for t in toys:
-			t.sense(delta)
+			if is_instance_valid(t):
+				t.sense(delta)
 
 
 func _process(delta: float) -> void:
 	if draw and not authoritative and rules.enabled:
 		for t in toys:
-			t.sense(delta)
+			if is_instance_valid(t):
+				t.sense(delta)
 
 
 func _on_toy_sound(id: StringName, at: Vector3, strength: float) -> void:
@@ -612,6 +638,8 @@ func _on_toy_sound(id: StringName, at: Vector3, strength: float) -> void:
 func _on_rules_changed() -> void:
 	var on := rules == null or rules.enabled
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		t.visible = on
 		t.process_mode = Node.PROCESS_MODE_INHERIT if on else Node.PROCESS_MODE_DISABLED
 
@@ -627,6 +655,8 @@ func describe() -> Dictionary:
 func describe_lines() -> PackedStringArray:
 	var out := PackedStringArray()
 	for t in toys:
+		if not is_instance_valid(t):
+			continue
 		var d := t.describe()
 		out.append("%d %s %s%s%s" % [t.index, d["id"], d["at"], " awake" if d["awake"] else "", " on" if d["on"] else ""])
 	return out
