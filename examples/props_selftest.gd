@@ -1912,11 +1912,12 @@ func _test_toys() -> void:
 	toys.fall_limit = 4.0
 	toys.lost_mode = DotPropToyBox.LostMode.REMOVE
 	var pit := toys.add_toy(&"crate", Vector3(150, 1.0, 0.0))
+	var pit_id := pit.get_instance_id()
 	var n_pit := toys.count()
 	for _i in range(240):
 		toys.advance(1.0 / 60.0)
 		await get_tree().physics_frame
-	_check(lost_seen[0] == 1 and toys.count() == n_pit - 1 and not toys.toys.has(pit),
+	_check(lost_seen[0] == 1 and toys.count() == n_pit - 1 and not toys.toys.any(func(t: DotPropToy) -> bool: return t.get_instance_id() == pit_id),
 		"a crate dropped over a pit is lost after fall_limit and removed (LostMode.REMOVE)", "%d lost, %d toys of %d" % [lost_seen[0], toys.count(), n_pit])
 	toys.lost_mode = DotPropToyBox.LostMode.HOME
 	toys.fall_limit = 0.0
