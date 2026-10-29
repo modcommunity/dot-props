@@ -19,5 +19,6 @@ extends RefCounted
 #    bell rings.
 # 7: core/: DotPropModel (a model file as a body's picture, hull and mass) and DotPropFolder
 #    (a folder of .glb/.gltf files, with optional JSON sidecars, becomes catalogue props).
-const LEVEL := 7
+# 8: tools/: DotToolView (the first-person model of a held tool or toy, joins dot_view_model).
+const LEVEL := 8
 const OLDEST := 1

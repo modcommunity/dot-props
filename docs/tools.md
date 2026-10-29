@@ -34,6 +34,10 @@ A punt is an **impulse**, not a velocity, so a heavy prop goes less far than a l
 
 A frozen prop is **refused** by the gravity gun rather than thawed. The physics gun unfreezes what it grabs, because freezing is its own tool and unfreezing is the obvious undo; a gravity gun that quietly unfroze somebody's build would take a tower apart one piece at a time.
 
+## The held model is `DotToolView`
+
+A `Node3D` a game puts under the camera (`DotToolView.make(colour, domed, camera)`), in the `dot_view_model` group so dot-menu's `viewmodel_fov` reaches it, with a short `kick()`. It scales to the field of view with the same arithmetic a held weapon model uses and carries no scene path: `camera_ref` (a `DotNodeRef`) names the camera, and empty means the parent. A tool is not a node, so the game owns when to build and free it and when to hide it (outside first person).
+
 ## Deliberately not here
 
 - **Welding, ropes, thrusters, wheels.** Constraints are a much larger surface than spawning, they interact with each other, and a half-built constraint system is worse than none. `DotPropTool` is the hook.

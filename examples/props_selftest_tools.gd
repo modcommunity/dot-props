@@ -483,3 +483,59 @@ func _check_gravgun_refuses_frozen(spawner: DotPropSpawner) -> void:
 	refusing.wielder = &"alice"
 
 	_check(not refusing.may_act_on(frozen).ok or frozen.frozen, "a frozen prop stays frozen")
+
+
+## The held-tool model: the lens scale a held weapon model gets, a kick that dies away, a camera by ref.
+func _test_tool_view() -> void:
+	_section("a held tool's first-person model")
+
+	var cam := Camera3D.new()
+	cam.fov = 75.0
+	_world.add_child(cam)
+	var view := DotToolView.make(Color(0.9, 0.5, 0.2), false, cam)
+	_check(view.get_parent() == cam and view.is_in_group(&"dot_view_model"), "it sits under the camera and joins dot_view_model")
+	view._process(0.016)
+	_check(view.scale == Vector3.ONE and view.position == Vector3.ZERO, "with no hands_fov it is drawn under the camera's own lens")
+	view.set_hands_fov_at_4_3(40.0)
+	view._process(0.016)
+	_check(not is_equal_approx(view.scale.x, 1.0) and view.hands_fov > 1.0, "a viewmodel_fov scales it")
+	view.hands_fov = 0.0
+	view.kick()
+	view._process(0.0)
+	_check(view.position.z > 0.04, "a kick pushes it back")
+	view._process(1.0)
+	_check(is_zero_approx(view.position.z), "and the kick dies away")
+	_check(DotToolView.lens_scale(75.0, 0.0) == 1.0 and DotToolView.lens_scale(0.0, 60.0) == 1.0, "an unusable field of view scales nothing")
+	_check(is_equal_approx(DotToolView.vertical_from_horizontal_4_3(90.0), rad_to_deg(2.0 * atan(0.75))), "4:3 horizontal converts to vertical")
+
+	var barrel_kind := _count_spheres(view)
+	var domed := DotToolView.make(Color.GREEN, true)
+	_check(barrel_kind == 0 and _count_spheres(domed) == 1, "a launcher has a dome, a gun a barrel")
+	domed.queue_free()
+
+	var other := Camera3D.new()
+	other.fov = 100.0
+	other.name = "Other"
+	_world.add_child(other)
+	var holder := Node3D.new()
+	_world.add_child(holder)
+	var by_ref := DotToolView.make(Color.RED)
+	by_ref.camera_ref = DotNodeRef.of_path(^"../../Other")
+	by_ref.hands_fov = 60.0
+	holder.add_child(by_ref)
+	by_ref._process(0.016)
+	_check(is_equal_approx(by_ref.scale.x, DotToolView.lens_scale(100.0, 60.0)), "camera_ref picks the camera, not the parent")
+	_check(by_ref.describe().has("hands_fov") and by_ref.describe()["camera"], "describe reports it")
+
+	cam.queue_free()
+	other.queue_free()
+	holder.queue_free()
+	_done()
+
+
+func _count_spheres(root: Node) -> int:
+	var n := 0
+	for c in root.find_children("*", "MeshInstance3D", true, false):
+		if (c as MeshInstance3D).mesh is SphereMesh:
+			n += 1
+	return n
