@@ -128,10 +128,8 @@ func _test_explosion() -> void:
 	var near := spawner.spawn(&"crate", &"alice", Vector3(2.0, 0.0, 0.0))
 	var far := spawner.spawn(&"crate", &"alice", Vector3(40.0, 0.0, 0.0))
 
-	# Gravity off on both, so what is measured is the blast rather than the fall. The
-	# first version of this check read `linear_velocity.length()` one physics step
-	# after the barrel went off and reported the crate 40 m away as "shoved" at
-	# 0.16 m/s, which was one tick of gravity and nothing to do with the explosion.
+	# Gravity off on both, so what is measured is the blast rather than the fall (one tick of
+	# gravity once read as a 0.16 m/s shove).
 	for crate_body in [near.body(), far.body()]:
 		crate_body.freeze = false
 		crate_body.gravity_scale = 0.0
@@ -144,10 +142,7 @@ func _test_explosion() -> void:
 
 	damage.hurt(barrel.instance_id, 999.0, &"alice")
 
-	# The blast's shove is an impulse, and an impulse is not readable in
-	# `linear_velocity` until the step that consumes it has run. This addon's own
-	# notes record paying for that twice; this is the third time, and the first
-	# version of this check reported a barrel that moved nothing.
+	# An impulse is not readable in `linear_velocity` until the step that consumes it has run.
 	await get_tree().physics_frame
 
 	_check(blasts.size() == 1, "breaking a barrel describes one blast", "%d" % blasts.size())
@@ -376,10 +371,17 @@ func _test_disguise() -> void:
 	_check(back.prop_id == &"cabinet" and back.size.is_equal_approx(cabinet) and is_equal_approx(back.roll, 15.0)
 		and back.locked == d.locked, "a disguise survives the wire")
 
-	# Leant every way a player can turn it (every quarter turn of pitch and roll, and the
-	# eighths between), a bottle's box never goes under the floor and its lowest corner is on
-	# it: the first build turned a prop about the foot of its box and half a bottle laid on its
-	# side was under the floor, out of every shot.
+	_check_leant_bottle(rules)
+
+	var bad := DotPropDisguiseRules.new()
+	bad.hull_min_height = 0.1
+	_check(not bad.validate().ok, "rules whose smallest hull would be a capsule shorter than it is wide are refused")
+	_done()
+
+
+func _check_leant_bottle(rules: DotPropDisguiseRules) -> void:
+	# Leant every way a player can turn it, a bottle's box never goes under the floor and its
+	# lowest corner is on it.
 	var bottle_d := DotPropDisguise.of(&"bottle", Vector3(0.1, 0.32, 0.1))
 	var worst_low := INF
 	var worst_high := -INF
@@ -406,11 +408,6 @@ func _test_disguise() -> void:
 	_check(is_equal_approx(lying.y, 0.1) and is_equal_approx(lying.z, 0.32),
 		"a bottle on its side is as tall as it is wide and as long as it was tall (%s)" % str(lying))
 	_check(hull_ok, "and its hull and hitbox follow the leant box: as tall, the middle at half its height")
-
-	var bad := DotPropDisguiseRules.new()
-	bad.hull_min_height = 0.1
-	_check(not bad.validate().ok, "rules whose smallest hull would be a capsule shorter than it is wide are refused")
-	_done()
 
 
 func _test_taunts() -> void:

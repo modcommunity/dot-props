@@ -159,10 +159,9 @@ func build(placements: Array) -> DotResult:
 const CHANNEL := "dot_props.toys"
 
 
-## Adds one toy of catalogue [param id] at [param at] while the map runs (a loot crate dropped
-## by a zombie). Its index is past the built ones, so a game that pairs toys by index with a
-## client keeps such toys in a box of their own. Null when the id is unknown or the box is not
-## in the tree.
+## Adds one toy of catalogue [param id] at [param at] while the map runs. Its index is past
+## the built ones, so index-paired clients keep such toys apart. Null when the id is unknown
+## or the box is not in the tree.
 func add_toy(id: StringName, at: Vector3, yaw: float = 0.0, p_def: Dictionary = {}) -> DotPropToy:
 	if catalogue == null:
 		catalogue = DotPropToyCatalogue.stock()

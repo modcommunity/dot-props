@@ -1,17 +1,9 @@
 class_name DotPropBridge
 extends Node3D
 
-## A plank bridge over a gap in the road that sags under load and gives way under speed or
-## weight, so it is crossed slowly or not at all. Generic: the caller says how heavy and how
-## fast what is on it is ([method report]), calls [method step] once a tick and decides what
-## "the gap" is for the floor underneath (here, nothing: a truck that stays on a collapsed
-## bridge falls).
-##
-## [b]Strain, not mass alone.[/b] [method strain] grows with mass and with the square of speed,
-## so a light truck at a crawl and a heavy one at a walk are both fine, and anything fast is
-## not. The deck sags to [member sag_max] as strain approaches [member rating] and collapses
-## after the strain has stayed above it for [member hold] seconds (one bump at speed is not
-## enough, a drive across is). It stands again [member restore_after] seconds later.
+## A plank bridge that sags under load and collapses under speed or weight. The caller reports
+## mass and speed ([method report]) and calls [method step] each tick; strain must stay above
+## [member rating] for [member hold] seconds, so one bump is not enough.
 
 signal sagged(depth: float)
 signal collapsed

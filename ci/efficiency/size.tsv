@@ -1,9 +1,3 @@
 # size
 # Baselines only shrink: scripts/<gate> --update lowers or drops entries and refuses to add.
-addons/dot_props/toys/dot_prop_toy.gd	1076
-addons/dot_props/toys/dot_prop_toy_catalogue.gd::stock	111
-examples/props_selftest.gd	2166
-examples/props_selftest.gd::_test_disguise	96
-examples/props_selftest.gd::_test_gravgun_punts	106
-examples/props_selftest.gd::_test_toys	183
 examples/props_selftest.gd::_test_workshop_props	83

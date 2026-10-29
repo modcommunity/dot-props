@@ -84,7 +84,15 @@ var defs: Dictionary = {}
 ## 6 m/s, gravity 20 m/s², the family's movement).
 static func stock() -> DotPropToyCatalogue:
 	var c := DotPropToyCatalogue.new()
-	var _r := c.merge({
+	var all := _stock_loose()
+	all.merge(_stock_driven())
+	all.merge(_stock_fixed())
+	var _r := c.merge(all)
+	return c
+
+
+static func _stock_loose() -> Dictionary:
+	return {
 		"beach_ball": {
 			"name": "beach ball", "kind": "ball", "size": [1.0, 1.0, 1.0], "mass": 0.35,
 			"bounce": 0.78, "friction": 0.5, "damp": 0.25, "angular_damp": 0.4,
@@ -121,6 +129,11 @@ static func stock() -> DotPropToyCatalogue:
 			"colours": [[0.5, 0.4, 0.22], [0.25, 0.25, 0.28]],
 			"use": "Push", "kick": 4.0, "sound_hit": "toy_wood",
 		},
+	}
+
+
+static func _stock_driven() -> Dictionary:
+	return {
 		"tyre": {
 			"name": "tyre", "kind": "tyre", "size": [0.8, 0.28, 0.8], "mass": 7.0,
 			"bounce": 0.45, "friction": 0.9, "damp": 0.1, "angular_damp": 0.3,
@@ -157,6 +170,11 @@ static func stock() -> DotPropToyCatalogue:
 			"colours": [[0.35, 0.7, 0.5], [0.4, 0.42, 0.45]],
 			"sound_hit": "toy_wood",
 		},
+	}
+
+
+static func _stock_fixed() -> Dictionary:
+	return {
 		"trampoline": {
 			"name": "trampoline", "kind": "bouncer", "size": [2.4, 0.45, 2.4], "mass": 0.0,
 			"colours": [[0.1, 0.1, 0.12], [0.2, 0.45, 0.85]],
@@ -192,8 +210,7 @@ static func stock() -> DotPropToyCatalogue:
 			"colours": [[0.45, 0.32, 0.22], [0.85, 0.68, 0.25]],
 			"use": "Ring", "sound_use": "toy_bell",
 		},
-	})
-	return c
+	}
 
 
 ## Adds or replaces definitions from `{id: {fields}}`; a field left out of a replacement keeps

@@ -1,13 +1,9 @@
 class_name DotPropLedge
 extends StaticBody3D
 
-## A rock outcrop that pinches a road down to a narrow ledge: solid, tapered at both ends so a
-## wheel is guided in rather than struck, tall enough that a truck's body scrapes it. Build it
-## with [method make], then place it with its origin on the road's centreline at the stretch's
-## middle and the road's frame ([code]x[/code] across, [code]z[/code] along).
-##
-## The drop on the other side is the road's own business: this piece only takes width, and
-## [method clear_width] says what is left, so a game can refuse a ledge no truck fits.
+## A rock outcrop pinching a road to a narrow ledge, tapered so a wheel is guided in rather
+## than struck. Build it with [method make], origin on the road's centreline. It only takes
+## width; [method clear_width] says what is left, so a game can refuse a ledge no truck fits.
 
 ## Metres of road the outcrop takes, measured from the edge it grows out of.
 var intrusion: float = 2.0

@@ -105,10 +105,8 @@ func _test_spawning() -> void:
 	)
 	_check(granted != null, "and one they hold allows it")
 
-	# The definition's mass reaches the body. Every prop in this catalogue is the
-	# same 20 kg scene, so a `safe` that weighs 900 kg is the only evidence that
-	# `DotPropDef.mass` is simulated rather than merely compared against
-	# `grab_mass_limit` — which is all it used to be.
+	# The definition's mass reaches the body: a 900 kg `safe` among 20 kg scenes is the evidence
+	# that `DotPropDef.mass` is simulated, not just compared against `grab_mass_limit`.
 	var safe := spawner.spawn(&"safe", &"alice", Vector3(0.0, 9.0, 0.0))
 
 	_check(
@@ -130,14 +128,8 @@ func _test_spawning() -> void:
 	_done()
 
 
-## The same spawner, into a 2D world.
-##
-## [b]The point of this section is that everything except the placement is shared.[/b]
-## The budget, the interval, the undo stack, the ownership and the removal are the same
-## code — so what is worth checking is the three lines that differ and the one thing a
-## mixed catalogue makes possible: asking for a 2D prop through the 3D entry point, and
-## the reverse. Both have to be refused rather than half-built, because a scene that is
-## instantiated and then rejected is a leaked node that nothing reports.
+## The same spawner, into a 2D world. Only the placement differs; the wrong dimension through
+## either entry point must be refused, not half-built (a rejected scene is a leaked node).
 func _test_spawning_2d() -> void:
 	_section("spawning in 2D")
 
@@ -173,10 +165,8 @@ func _test_spawning_2d() -> void:
 	_check(spawner.world_count() == 1, "the world counts it")
 	_check(spawner.player_count(&"alice") == 1, "and so does its owner")
 
-	# Freezing is the one prop operation a 2D game needs and it lives on the physics
-	# gun, which is a 3D tool. It handles both, in the one place that also zeroes the
-	# velocities — a body frozen while moving otherwise leaps away when somebody thaws
-	# it, minutes later, with nothing to connect the two.
+	# Freezing lives on the 3D physics gun and handles both, zeroing velocities in one place so a
+	# body frozen while moving does not leap away when thawed.
 	bench.body_2d().linear_velocity = Vector2(400.0, 0.0)
 	DotPhysGun.set_frozen(bench, true)
 	_check(bench.frozen and bench.body_2d().freeze, "and it freezes")

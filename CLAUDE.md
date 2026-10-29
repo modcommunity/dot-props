@@ -28,7 +28,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | `addons/dot_props/runtime/` | `DotPropSpawner` (the node a game adds), `DotPropDamage`, `DotPropCarry`, `DotPropIO`; road hazards `DotPropBridge` (a deck that sags and falls, with a mirror mode), `DotPropRubble`, `DotPropLedge` (a rock outcrop pinching a road to a ledge) |
 | `addons/dot_props/hunt/` | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | `addons/dot_props/tools/` | `DotPropTool` (reach, targeting, `may_act_on`), `DotPhysGun`, `DotGravGun` |
-| `addons/dot_props/toys/` | `DotPropToyCatalogue` (18 stock toys over 16 kinds, retuned from JSON), `DotPropToyBox` (a map's toys, the awake cap, push/stand/use/hit/launch), `DotPropToy` (one, its bodies and look), `DotPropToyRules` (`sv_toys*`), `DotPropToySounds` (+ `sounds/`, CC0), `DotPropToyLook` (meshes made in code) |
+| `addons/dot_props/toys/` | `DotPropToyCatalogue` (18 stock toys over 16 kinds, retuned from JSON), `DotPropToyBox` (a map's toys, the awake cap, push/stand/use/hit/launch), `DotPropToy` (one, its bodies and look; the per-kind builders are its base script `dot_prop_toy_parts.gd`, no `class_name`), `DotPropToyRules` (`sv_toys*`), `DotPropToySounds` (+ `sounds/`, CC0), `DotPropToyLook` (meshes made in code) |
 | `fixtures/` | 3D and 2D prop bodies for the suite |
 | `examples/props_selftest.tscn` | the suite; spawns real `RigidBody3D`s into a real tree and checks every node is freed |
 | `examples/toy_gallery.tscn` | every stock toy rendered on a lawn (xvfb; `--kick` shows them moving) |

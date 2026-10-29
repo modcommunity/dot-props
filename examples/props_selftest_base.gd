@@ -52,11 +52,8 @@ func _catalogue() -> DotPropCatalogue:
 	scenery.can_freeze = false
 	catalogue.add(scenery)
 
-	# A 2D prop, in the same catalogue as the 3D ones on purpose. A [DotPropDef]
-	# deliberately says nothing about dimension — it is an id, a scene, a cost and a
-	# permission — so a catalogue holding both is a legitimate thing for a game with a
-	# 2D world to have, and the spawner has to pick the right entry point rather than
-	# infer one.
+	# A 2D prop in the same catalogue on purpose: a DotPropDef says nothing about dimension,
+	# so the spawner must pick the right entry point rather than infer one.
 	var bench := DotPropDef.make(&"bench", "res://fixtures/prop_body_2d.tscn")
 	bench.category = &"furniture"
 	bench.mass = 55.0
@@ -79,7 +76,7 @@ func _spawner(limits: DotPropLimits = null) -> DotPropSpawner:
 	return spawner
 
 
-# --- Definitions -----------------------------------------------------------
+# Definitions
 
 
 func _damage_node(spawner: DotPropSpawner) -> DotPropDamage:

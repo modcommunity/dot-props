@@ -243,10 +243,8 @@ func _test_freeze_limit() -> void:
 func _test_size_ceiling() -> void:
 	_section("the size ceiling")
 
-	# A size class answers a different question from a cost. A cost is a budget —
-	# twenty small props or two big ones. This is a ceiling: allow a hundred crates
-	# and forbid the one model that is the size of the map, without pricing it at a
-	# hundred.
+	# A size class is a ceiling, not a budget: allow a hundred crates and forbid the one model
+	# the size of the map.
 	var limits := DotPropLimits.new()
 	limits.spawn_interval = 0.0
 	limits.max_size = DotPropDef.Size.SMALL
@@ -430,40 +428,26 @@ func _test_gravgun_punts() -> void:
 
 	var punted := gun.punt(null, origin, aim)
 
-	# An impulse is applied by the physics server, not written into linear_velocity,
-	# so it is not readable until the step that consumes it has run. Reading it
-	# straight after the call gives the velocity from before the punt, which is how
-	# the first version of this test reported "0.0 -> 0.0" for a punt that worked.
+	# An impulse is not readable until the step that consumes it has run; reading it at once
+	# gives the velocity from before the punt.
 	await get_tree().physics_frame
 
 	var light_speed := crate.body().linear_velocity.z
 
 	_check(punted == crate, "punting returns the prop")
 	_check(not gun.is_carrying(), "and lets go of it")
-	_check(
-		light_speed < -1.0,
-		"and sends it away along the aim",
-		"%.1f m/s" % light_speed
-	)
+	_check(light_speed < -1.0, "and sends it away along the aim", "%.1f m/s" % light_speed)
 
 	# A punt is an impulse, so a heavy prop goes less far than a light one — which
 	# is what makes the tool feel like it has weight, and is free because the solver
 	# already divides by the mass.
 	var heavy := spawner.spawn(&"safe", &"alice", Vector3(0.0, 2.0, -3.0))
 
-	# Not set here: the spawner puts the definition's mass on the body. Asserted
-	# rather than assumed, because if that ever stops happening this test would
-	# silently become "two 20 kg props go the same distance", which passes the
-	# comparison below by being wrong in both halves.
-	_check(
-		is_equal_approx(heavy.body().mass, 900.0),
-		"a heavy prop is heavy without being told twice"
-	)
+	# Not set here: the spawner puts the definition's mass on the body. Asserted so the
+	# comparison below cannot pass by being wrong in both halves.
+	_check(is_equal_approx(heavy.body().mass, 900.0), "a heavy prop is heavy without being told twice")
 
-	# The mass is set BEFORE a step runs, because the physics server picks it up on
-	# the next one — and an impulse applied in between is divided by the old mass,
-	# which made the first version of this test report the 900 kg prop flying twenty
-	# times further than the 20 kg one.
+	# Mass is set BEFORE a step runs: an impulse applied in between is divided by the old mass.
 	await get_tree().physics_frame
 
 	var heavy_gun := DotGravGun.new()
@@ -484,8 +468,13 @@ func _test_gravgun_punts() -> void:
 		"%.1f vs %.1f m/s" % [heavy.body().linear_velocity.z, light_speed]
 	)
 
-	# A frozen prop is refused rather than quietly thawed: a gravity gun that
-	# unfroze a build would take a tower apart one piece at a time.
+	_check_gravgun_refuses_frozen(spawner)
+	spawner.queue_free()
+	_done()
+
+
+## A frozen prop is refused rather than quietly thawed, or a build comes apart piece by piece.
+func _check_gravgun_refuses_frozen(spawner: DotPropSpawner) -> void:
 	var frozen := spawner.spawn(&"crate", &"alice", Vector3(0.0, 2.0, -3.0))
 	DotPhysGun.set_frozen(frozen, true)
 
@@ -493,10 +482,4 @@ func _test_gravgun_punts() -> void:
 	refusing.spawner = spawner
 	refusing.wielder = &"alice"
 
-	_check(
-		not refusing.may_act_on(frozen).ok or frozen.frozen,
-		"a frozen prop stays frozen"
-	)
-
-	spawner.queue_free()
-	_done()
+	_check(not refusing.may_act_on(frozen).ok or frozen.frozen, "a frozen prop stays frozen")

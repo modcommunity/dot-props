@@ -1,11 +1,8 @@
 class_name DotPropRubble
 extends StaticBody3D
 
-## A heap of fallen rock lying low across part of a road: a bump a vehicle can cross slowly or
-## swing round, never a wall. Build it with [method make], then place it.
-##
-## The collider is one wedge (a ramp up to [member height] and a short drop) so a wheel climbs
-## it instead of striking a box face; the look is a few squashed, turned rocks on top of it.
+## A heap of fallen rock across part of a road: a bump, never a wall. Build it with
+## [method make]. The collider is one wedge so a wheel climbs it instead of striking a box face.
 
 ## Peak height of the heap in metres. A truck's wheels clear 0.5 at a walk and are thrown at speed.
 var height: float = 0.5

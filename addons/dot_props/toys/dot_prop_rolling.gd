@@ -1,12 +1,9 @@
 class_name DotPropRolling
 extends RefCounted
 
-## The harm a loose toy does by moving: a barrel that rolls into somebody. Server only; a game asks [method scan]
-## each tick with the people it cares about and applies the damage through its own combat.
-##
-## A toy that is merely nudged does nothing: the speed must pass [member min_speed], and the damage grows with the
-## speed over it and the toy's mass, up to [member max_damage]. One person is hurt at most once per
-## [member cooldown] by any one toy, so a barrel sliding along somebody's legs is one hit, not sixty.
+## The harm a loose toy does by moving. Server only; a game calls [method scan] each tick and
+## applies the damage itself. Speed must pass [member min_speed]; one person is hurt at most
+## once per [member cooldown] per toy, so a barrel sliding along legs is one hit, not sixty.
 
 ## Slowest a body may be going to hurt, m/s. A barrel pushed along by a walking survivor never reaches it.
 var min_speed: float = 3.0
