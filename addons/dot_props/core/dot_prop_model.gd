@@ -118,6 +118,7 @@ static func repair_textures(root: Node, model_path: String) -> int:
 				atlas = _texture(atlas_path)
 
 				if atlas == null:
+					DotLog.warn(CHANNEL, "the colour atlas exists but could not be loaded", {"path": atlas_path})
 					return repaired
 
 			var copy := material.duplicate() as BaseMaterial3D
