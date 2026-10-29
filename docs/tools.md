@@ -36,7 +36,7 @@ A frozen prop is **refused** by the gravity gun rather than thawed. The physics 
 
 ## The held model is `DotToolView`
 
-A `Node3D` a game puts under the camera (`DotToolView.make(colour, domed, camera)`), in the `dot_view_model` group so dot-menu's `viewmodel_fov` reaches it, with a short `kick()`. It scales to the field of view with the same arithmetic a held weapon model uses and carries no scene path: `camera_ref` (a `DotNodeRef`) names the camera, and empty means the parent. A tool is not a node, so the game owns when to build and free it and when to hide it (outside first person).
+A `Node3D` a game puts under the camera (`DotToolView.make(colour, domed, camera)`), in the `dot_view_model` group so dot-menu's `viewmodel_fov` reaches it, with a short `kick()`. It scales to the field of view with dot-core's `DotViewLens` (API 25, the same maths a held weapon model uses; dot-props needs dot-core 25 for it) and carries no scene path: `camera_ref` (a `DotNodeRef`) names the camera, and empty means the parent. A tool is not a node, so the game owns when to build and free it and when to hide it (outside first person).
 
 ## Deliberately not here
 

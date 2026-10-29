@@ -6,9 +6,9 @@ extends Node3D
 
 const CHANNEL := "props.toolview"
 ## The lens and depth the model is authored at; the same numbers a held weapon model uses.
-const REFERENCE_FOV := 90.0
-const REFERENCE_DEPTH := 0.55
-const MAX_PULL_IN := 0.1
+const REFERENCE_FOV := DotViewLens.REFERENCE_FOV
+const REFERENCE_DEPTH := DotViewLens.REFERENCE_DEPTH
+const MAX_PULL_IN := DotViewLens.MAX_PULL_IN
 
 ## The camera this draws under, resolved against this node. Left empty it is the parent.
 @export var camera_ref: DotNodeRef = null
@@ -37,15 +37,12 @@ static func make(colour: Color, is_domed: bool = false, camera: Node = null) -> 
 
 ## The vertical field of view that is [param horizontal] degrees across a 4:3 frame.
 static func vertical_from_horizontal_4_3(horizontal: float) -> float:
-	var half := deg_to_rad(clampf(horizontal, 20.0, 170.0) * 0.5)
-	return rad_to_deg(2.0 * atan(tan(half) * 3.0 / 4.0))
+	return DotViewLens.vertical_from_horizontal_4_3(horizontal)
 
 
 ## How much X and Y are scaled to draw at [param hands] degrees under a [param camera]-degree lens.
 static func lens_scale(camera: float, hands: float) -> float:
-	if hands <= 1.0 or hands >= 179.0 or camera <= 1.0 or camera >= 179.0:
-		return 1.0
-	return tan(deg_to_rad(camera) * 0.5) / tan(deg_to_rad(hands) * 0.5)
+	return DotViewLens.lens_scale(camera, hands)
 
 
 ## The same horizontal-at-4:3 convention as a held weapon model, so the two agree.
@@ -68,11 +65,7 @@ func _init() -> void:
 
 func _process(delta: float) -> void:
 	_kick = maxf(0.0, _kick - delta * 6.0)
-	var camera := _find_camera()
-	var k := lens_scale(camera.fov, hands_fov) if camera != null else 1.0
-	scale = Vector3(k, k, 1.0)
-	var size := lens_scale(REFERENCE_FOV, hands_fov) if camera != null else 1.0
-	position = Vector3(0.0, 0.0, -maxf((size - 1.0) * REFERENCE_DEPTH, -MAX_PULL_IN) + _kick * 0.05)
+	DotViewLens.apply(self, _find_camera(), hands_fov, 1.0, _kick * 0.05)
 
 
 func _find_camera() -> Camera3D:
