@@ -366,14 +366,9 @@ func _build_wobble() -> void:
 		var _edge := DotPropToyLook.add(look, DotPropToyLook.box(Vector3(_size.x * 1.02, 0.05, _size.z * 1.02)), _mat(1, 0.5), Transform3D(Basis.IDENTITY, Vector3(0, -0.07, 0)))
 
 
-# --- The driven kinds ---------------------------------------------------------------
-#
-# A swing, a punching bag, a see-saw, a wobbly platform and a roundabout each move about one
-# fixed point, so each is an angle or two and a spin, integrated here, and a kinematic body
-# posed from them. Not joints: Godot's own hinge and pin joints blew a swing pushed at an angle
-# to its bar off to a thousand kilometres within half a second (2026-10-12), and a joint
-# between a static frame and a body is a solver iteration a server pays for every tick. An
-# angle is cheap, cannot drift off its pivot, and is the same on every machine that runs it.
+# Driven kinds are an angle or two integrated here and a kinematic body posed from them, not
+# joints: a hinge between a static frame and a body flung a swing away, and costs the server a
+# solver iteration per tick.
 
 ## How hard the sprung pivot rights a wobbly platform, per radian, and how much it damps
 ## (per second, of its spin); the most it tilts.
@@ -526,5 +521,3 @@ func _build_bell() -> void:
 		var _bell := DotPropToyLook.add(_flourish, DotPropToyLook.cylinder(0.3, 0.42, 0.13, 16), _mat(1, 0.25), Transform3D(Basis.IDENTITY, Vector3(0, -0.3, 0)))
 		var _rope := DotPropToyLook.rod(_flourish, Vector3(0, -0.5, 0), Vector3(0, -1.2, 0), 0.015, DotPropToyLook.material(Color(0.8, 0.75, 0.6)))
 
-
-# --- What people do to it ---------------------------------------------------------
