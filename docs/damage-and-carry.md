@@ -29,3 +29,6 @@ Two timing facts that each cost a test more than once:
 - **A `mass` assignment is not picked up until the next step**, so an impulse applied in between is divided by the old mass (a 900 kg prop flew twenty times further than a 20 kg one).
 
 **A physics assertion that does not say what it is excluding is measuring gravity.** The check that a crate outside a blast is *not* shoved passed a falling crate at 0.16 m/s, which was one tick of gravity.
+
+
+**Break effects.** `DotPropDef.material` (glass, wood, metal, stone, plastic; default wood) says what the prop is made of. A game wires the splinters, shards and sound once: `damage.broken.connect(func(prop, at, _by): fx_break.burst(prop.def.material, at))` with a `DotFxBreak` from dot-fx. dot-props does not depend on dot-fx.

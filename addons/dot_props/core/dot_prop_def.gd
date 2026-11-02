@@ -117,6 +117,9 @@ enum Size {
 ## thing that separates those is closing speed rather than accumulated damage.
 @export_range(0.0, 1000.0, 0.5) var break_impact_speed: float = 0.0
 
+## What the prop is made of: glass, wood, metal, stone or plastic. Break effects (dot-fx's DotFxBreak) key on it.
+@export var material: StringName = &"wood"
+
 ## Radius in metres of the explosion this prop makes when it breaks. Zero for none.
 ##
 ## [b]This addon does not explode anything.[/b] It has no damage model and must not
@@ -233,6 +236,8 @@ func to_dictionary() -> Dictionary:
 		out["max_health"] = max_health
 	if break_impact_speed > 0.0:
 		out["break_impact_speed"] = break_impact_speed
+	if material != &"wood":
+		out["material"] = String(material)
 	if explode_radius > 0.0:
 		out["explode_radius"] = explode_radius
 		out["explode_damage"] = explode_damage
@@ -269,6 +274,7 @@ static func from_dictionary(data: Dictionary) -> DotPropDef:
 	prop.rideable = bool(data.get("rideable", true))
 	prop.max_health = maxf(float(data.get("max_health", 0.0)), 0.0)
 	prop.break_impact_speed = maxf(float(data.get("break_impact_speed", 0.0)), 0.0)
+	prop.material = StringName(str(data.get("material", "wood")))
 	prop.explode_radius = maxf(float(data.get("explode_radius", 0.0)), 0.0)
 	prop.explode_damage = maxf(float(data.get("explode_damage", 0.0)), 0.0)
 	prop.explode_force = maxf(float(data.get("explode_force", 0.0)), 0.0)

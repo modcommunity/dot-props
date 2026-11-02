@@ -58,7 +58,7 @@ To show a player's subscribed Workshop props in solo, call `spawner.catalogue.fo
 }
 ```
 
-A prop's scene is a `RigidBody3D` with no script. Other fields: `size` (a prop larger than the server's `max_size` is refused), `limit_group` (counted against `group_limits`), `can_freeze`, `rideable`, `break_impact_speed`, `explode_radius` / `explode_damage` / `explode_force`, `entitlement` and `permission` (who may spawn it), and `meta` for your own data.
+A prop's scene is a `RigidBody3D` with no script. Other fields: `size` (a prop larger than the server's `max_size` is refused), `limit_group` (counted against `group_limits`), `can_freeze`, `rideable`, `break_impact_speed`, `material` (for break effects), `explode_radius` / `explode_damage` / `explode_force`, `entitlement` and `permission` (who may spawn it), and `meta` for your own data.
 
 ### The tools
 
