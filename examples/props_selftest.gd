@@ -13,13 +13,13 @@ extends "props_selftest_toys.gd"
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 354
+const CHECKS := 357
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
 ## bailed out early after a failed guard is counted as not finished on purpose. The CHECKS
 ## total is the other half — see docs/testing.md.
-const SECTIONS := 42
+const SECTIONS := 43
 
 
 func _ready() -> void:
@@ -68,6 +68,7 @@ func _run() -> void:
 	_test_toy_catalogue()
 	await _test_toys()
 	await _test_toys_prefilter()
+	await _test_toys_grid_moving()
 	await _test_toy_mirror()
 	await _test_toys_freed()
 	await _test_rolling()

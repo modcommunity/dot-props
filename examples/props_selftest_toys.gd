@@ -67,6 +67,57 @@ func _test_toys_prefilter() -> void:
 	_done()
 
 
+func _test_toys_grid_moving() -> void:
+	_section("toy box grid: moving toys and toys crossing cells give the brute-force result")
+	var made := _scatter_box(200)
+	var box: DotPropToyBox = made[1]
+	await _step_physics(20)
+	var rng := DotRandomStream.new(23, &"toy_grid")
+	var bad := ""
+	var pushes := 0
+	var crossed := 0
+	var stands := 0
+	for round_i in range(6):
+		for t in box.toys:
+			if t.body != null and rng.next_chance(0.4):
+				var before := t.body.global_position
+				t.body.global_position = Vector3(rng.next_range_f(-95, 95), 0.6, rng.next_range_f(-95, 95))
+				t.body.linear_velocity = Vector3(rng.next_range_f(-8, 8), 0, rng.next_range_f(-8, 8))
+				if floori(before.x / 8.0) != floori(t.body.global_position.x / 8.0):
+					crossed += 1
+		await _step_physics(3)
+		for _p in range(40):
+			var bodies: Array[DotPropToy] = []
+			for t in box.toys:
+				if t.body != null:
+					bodies.append(t)
+			var at := (rng.next_pick(bodies) as DotPropToy).body.global_position
+			var feet := Vector3(at.x + rng.next_range_f(-1, 1), 0.0, at.z + rng.next_range_f(-1, 1))
+			var vel := Vector3(rng.next_range_f(-6, 6), 0, rng.next_range_f(-6, 6))
+			for t in box.toys:
+				t.touched_at = -1.0
+			var n1 := box.push_from(feet, vel, 0.35, 1.8)
+			var s1 := box.stand_on(feet, 80.0)
+			var set1 := []
+			for t in box.toys:
+				set1.append(t.touched_at)
+				t.touched_at = -1.0
+			var n2 := box.push_from_unfiltered(feet, vel, 0.35, 1.8)
+			var s2 := box.stand_on_unfiltered(feet, 80.0)
+			var set2 := []
+			for t in box.toys:
+				set2.append(t.touched_at)
+			pushes += n1
+			stands += s1
+			if n1 != n2 or s1 != s2 or set1 != set2:
+				bad += "round %d: push %d/%d stand %d/%d; " % [round_i, n1, n2, s1, s2]
+	_check(bad.is_empty() and pushes > 0, "grid push_from matches brute force over 240 queries on moving toys", "%d pushes %s" % [pushes, bad.left(200)])
+	_check(crossed > 50, "the toys really crossed cells between rounds", str(crossed))
+	_check(stands >= 0 and bad.is_empty(), "grid stand_on matches brute force", "%d stands" % stands)
+	made[0].queue_free()
+	_done()
+
+
 func _test_toys() -> void:
 	_section("toys on the server: pushed, kicked, stood on, switched, bounced on, capped, sent home")
 	var made := _toy_world(true)

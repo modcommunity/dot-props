@@ -84,6 +84,9 @@ var _now: float = 0.0
 var _rested: Dictionary = {}
 var _calm: Dictionary = {}
 var _footprints: StaticBody3D = null
+var _grid: Dictionary = {}
+var _grid_cell: float = 8.0
+var _grid_frame: int = -1
 var _rules_connected: bool = false
 
 
@@ -148,6 +151,7 @@ func build(placements: Array) -> DotResult:
 		toy.link_fn = _flip
 		var _s := toy.sound.connect(_on_toy_sound)
 		toys.append(toy)
+		_grid_frame = -1
 
 	_build_footprints()
 	_on_rules_changed()
@@ -192,6 +196,7 @@ func remove_toy(toy: DotPropToy) -> void:
 	if at < 0:
 		return
 	toys.remove_at(at)
+	_grid_frame = -1
 	_rested.erase(toy)
 	_calm.erase(toy)
 	for i in range(at, toys.size()):
@@ -208,6 +213,7 @@ func clear() -> void:
 			remove_child(toy)
 			toy.queue_free()
 	toys.clear()
+	_grid_frame = -1
 	_rested.clear()
 	_calm.clear()
 	missing.clear()
@@ -315,6 +321,7 @@ func _settled(t: DotPropToy) -> bool:
 ## One tick on the server: the clock, the lost toys sent home, and the awake cap.
 func advance(delta: float) -> void:
 	_now += delta
+	_grid_frame = -1
 	if not authoritative or not rules.enabled:
 		return
 	var awake: Array[DotPropToy] = []
@@ -373,11 +380,9 @@ func push_from(feet: Vector3, velocity: Vector3, radius: float, height: float) -
 		return 0
 	var n := 0
 	var push_scale := rules.push_scale
-	# The same test as _near, inlined: one call per toy per player per tick is the cost at 100 players.
-	for t in toys:
-		if not is_instance_valid(t):
-			continue
-		if not t.pushable or t.body == null:
+	for i in _candidates(feet):
+		var t: DotPropToy = toys[i]
+		if not is_instance_valid(t) or not t.pushable or t.body == null:
 			continue
 		var reach := 4.0 + t._radius
 		var r2 := reach * reach
@@ -390,6 +395,58 @@ func push_from(feet: Vector3, velocity: Vector3, radius: float, height: float) -
 			t.touched_at = _now
 			n += 1
 	return n
+
+
+## Toy indices (ascending) whose node or body lies in the 3x3 cells round [param at]. The grid is
+## rebuilt once per physics frame, so its cost is per tick, not per player.
+func _candidates(at: Vector3) -> Array:
+	var frame := Engine.get_physics_frames()
+	if frame != _grid_frame:
+		_rebuild_grid()
+		_grid_frame = frame
+	var cx := floori(at.x / _grid_cell)
+	var cz := floori(at.z / _grid_cell)
+	var out: Array = []
+	for x in range(cx - 1, cx + 2):
+		for z in range(cz - 1, cz + 2):
+			var cell: Variant = _grid.get(Vector2i(x, z))
+			if cell != null:
+				out.append_array(cell)
+	if out.size() > 1:
+		out.sort()
+		var w := 1
+		for r in range(1, out.size()):
+			if out[r] != out[w - 1]:
+				out[w] = out[r]
+				w += 1
+		out.resize(w)
+	return out
+
+
+func _rebuild_grid() -> void:
+	var cell := 8.0
+	for t in toys:
+		if is_instance_valid(t):
+			cell = maxf(cell, 4.0 + t._radius)
+	_grid_cell = cell
+	_grid.clear()
+	for i in range(toys.size()):
+		var t := toys[i]
+		if not is_instance_valid(t) or t.body == null:
+			continue
+		var a := Vector2i(floori(t.global_position.x / cell), floori(t.global_position.z / cell))
+		var b := Vector2i(floori(t.body.global_position.x / cell), floori(t.body.global_position.z / cell))
+		_grid_put(a, i)
+		if b != a:
+			_grid_put(b, i)
+
+
+func _grid_put(key: Vector2i, i: int) -> void:
+	var cell: Variant = _grid.get(key)
+	if cell == null:
+		_grid[key] = [i]
+	else:
+		cell.append(i)
 
 
 ## [method push_from] without the prefilter, the reference the suite compares it with.
@@ -411,10 +468,21 @@ func stand_on(feet: Vector3, mass: float) -> int:
 	if not authoritative or not rules.enabled:
 		return 0
 	var n := 0
+	for i in _candidates(feet):
+		var t: DotPropToy = toys[i]
+		if is_instance_valid(t) and t.body != null and _near(t, feet, 3.0) and t.stand_on(feet, mass, gravity):
+			t.touched_at = _now
+			n += 1
+	return n
+
+
+## [method stand_on] without the grid, the reference the suite compares it with.
+func stand_on_unfiltered(feet: Vector3, mass: float) -> int:
+	if not authoritative or not rules.enabled:
+		return 0
+	var n := 0
 	for t in toys:
-		if not is_instance_valid(t):
-			continue
-		if t.body != null and _near(t, feet, 3.0) and t.stand_on(feet, mass, gravity):
+		if is_instance_valid(t) and t.body != null and _near(t, feet, 3.0) and t.stand_on(feet, mass, gravity):
 			t.touched_at = _now
 			n += 1
 	return n
