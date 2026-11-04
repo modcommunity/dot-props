@@ -8,6 +8,14 @@ extends RefCounted
 ## mesh made here is the same in every game, costs nothing to deliver, and changes with the
 ## definition's numbers. Matte, unshaded nowhere, and without textures: what the browser's
 ## Compatibility renderer draws cheapest.
+##
+## Eight toys' shapes are small own-made glb files in [code]models/[/code] (vertex colours
+## and materials only, 5 to 20 KB each, built by [code]art-src/build_toy_models.py[/code]);
+## [method add_model] scales one to the toy's size and gives its [code]c0[/code] and
+## [code]c1[/code] materials the definition's colours. A missing file falls back to the code
+## meshes, so a pack that strips [code]models/[/code] still draws every toy.
+
+const MODEL_DIR := "res://addons/dot_props/toys/models/"
 
 ## A plain matte material. Cached per colour, so eighteen toys of six colours make six.
 static var _materials: Dictionary = {}
@@ -43,6 +51,62 @@ static func painted() -> StandardMaterial3D:
 		made.roughness = 0.55
 		_materials["vertex"] = made
 	return made
+
+
+## A model from [code]models/[/code] fitted to [param size] (a zero axis keeps the model's own
+## proportion to the others) with its middle at [param at]; [param colours] are the materials
+## named c0 and c1. Returns null when the file is missing, and the caller draws the code meshes.
+static func add_model(parent: Node3D, model: String, size: Vector3, colours: Array, at: Vector3 = Vector3.ZERO, turn: Basis = Basis.IDENTITY) -> Node3D:
+	var path := MODEL_DIR + model + ".glb"
+	if not ResourceLoader.exists(path):
+		return null
+	var scene := load(path) as PackedScene
+	if scene == null:
+		return null
+	var root := scene.instantiate() as Node3D
+	var meshes: Array[MeshInstance3D] = []
+	_collect(root, meshes)
+	if meshes.is_empty():
+		root.free()
+		return null
+	var box := AABB()
+	var first := true
+	for m in meshes:
+		var b: AABB = Transform3D(turn, Vector3.ZERO) * m.mesh.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	var scale := Vector3.ONE
+	var known := 0.0
+	for axis in 3:
+		if size[axis] > 0.0 and box.size[axis] > 0.0:
+			scale[axis] = size[axis] / box.size[axis]
+			known = scale[axis]
+	for axis in 3:
+		if size[axis] <= 0.0:
+			scale[axis] = known if known > 0.0 else 1.0
+	var holder := Node3D.new()
+	holder.name = "Model"
+	holder.transform = Transform3D(Basis.from_scale(scale) * turn, at - (Basis.from_scale(scale) * (turn * box.get_center())))
+	for m in meshes:
+		m.get_parent().remove_child(m)
+		m.transform = Transform3D.IDENTITY
+		for surface in m.mesh.get_surface_count():
+			var source := m.mesh.surface_get_material(surface)
+			var key := source.resource_name if source != null else ""
+			if key == "c0" or key == "c1":
+				var i := int(key.trim_prefix("c"))
+				m.set_surface_override_material(surface, material(colours[i % colours.size()] if not colours.is_empty() else Color.WHITE, 0.75))
+		holder.add_child(m)
+	root.free()
+	parent.add_child(holder)
+	return holder
+
+
+static func _collect(node: Node, out: Array[MeshInstance3D]) -> void:
+	if node is MeshInstance3D:
+		out.append(node)
+	for c in node.get_children():
+		_collect(c, out)
 
 
 static func add(parent: Node3D, mesh: Mesh, mat: Material, at: Transform3D = Transform3D.IDENTITY) -> MeshInstance3D:

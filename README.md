@@ -222,7 +222,7 @@ toys.blast(at, radius, speed)                     # an explosion
 
 Replicate each toy by its index with `state_transform()`, `on` and `count`, and call `show_state` with them on a client. Connect `sound` to your audio and add `DotPropToySounds.rows()` to your sound catalogue. `sv_toys 0` removes them, `sv_toys_awake` caps how many simulate at once (24, or 8 in a browser), and `sv_toys_push` sets how hard walking into one pushes it. Add or retune toys with `DotPropToyCatalogue.merge_json`. See [docs/toys.md](docs/toys.md).
 
-The toy sounds are Kenney's (CC0) plus a horn made for this addon; `addons/dot_props/toys/sounds/CREDITS.md` lists every file. The toys are drawn with meshes made in code, so there are no models to credit.
+The toy sounds are Kenney's (CC0) plus a horn made for this addon; `addons/dot_props/toys/sounds/CREDITS.md` lists every file. Eight toys (pin, barrel, crate, tyre, lamp post, fountain, horn, bell) have a small glb look in `addons/dot_props/toys/models/`, made for this addon and released CC0; the generator is `art-src/build_toy_models.py` (Blender, headless). Every toy still has a code-built fallback, so a pack that strips `models/` draws as before. The other toys are drawn with meshes made in code.
 
 ## License
 MIT. See [LICENSE](LICENSE).

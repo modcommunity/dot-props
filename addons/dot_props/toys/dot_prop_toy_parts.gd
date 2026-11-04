@@ -195,6 +195,8 @@ func _build_pin() -> void:
 	var look := _look_on(b)
 	if look == null:
 		return
+	if DotPropToyLook.add_model(look, "pin", Vector3(r * 2.0, h, r * 2.0), def.get("colours", [])) != null:
+		return
 	var _belly := DotPropToyLook.add(look, DotPropToyLook.cylinder(r * 0.6, h * 0.55, r), _mat(0, 0.3), Transform3D(Basis.IDENTITY, Vector3(0, -h * 0.22, 0)))
 	var _neck := DotPropToyLook.add(look, DotPropToyLook.cylinder(r * 0.45, h * 0.3, r * 0.95), _mat(0, 0.3), Transform3D(Basis.IDENTITY, Vector3(0, h * 0.18, 0)))
 	var _band := DotPropToyLook.add(look, DotPropToyLook.cylinder(r * 0.5, h * 0.06), _mat(1, 0.3), Transform3D(Basis.IDENTITY, Vector3(0, h * 0.14, 0)))
@@ -210,6 +212,8 @@ func _build_barrel() -> void:
 	var look := _look_on(b)
 	if look == null:
 		return
+	if DotPropToyLook.add_model(look, "barrel", Vector3(r * 2.0, h, r * 2.0), def.get("colours", [])) != null:
+		return
 	var _staves := DotPropToyLook.add(look, DotPropToyLook.cylinder(r, h, -1.0, 14), _mat(0))
 	for y: float in [-0.32, 0.32]:
 		var _hoop := DotPropToyLook.add(look, DotPropToyLook.torus(r * 0.97, r * 1.04), _mat(1, 0.4), Transform3D(Basis.IDENTITY, Vector3(0, h * y, 0)))
@@ -222,6 +226,8 @@ func _build_crate() -> void:
 	var _s := _shape(b, _box_shape(_size))
 	var look := _look_on(b)
 	if look == null:
+		return
+	if DotPropToyLook.add_model(look, "crate", _size, def.get("colours", [])) != null:
 		return
 	var _planks := DotPropToyLook.add(look, DotPropToyLook.box(_size), _mat(0))
 	var _band := DotPropToyLook.add(look, DotPropToyLook.box(Vector3(_size.x + 0.01, _size.y * 0.18, _size.z + 0.01)), _mat(1, 0.9))
@@ -237,6 +243,8 @@ func _build_tyre() -> void:
 	var _s := _shape(b, _hull_cylinder(r, w), Transform3D(axle, Vector3.ZERO))
 	var look := _look_on(b)
 	if look == null:
+		return
+	if DotPropToyLook.add_model(look, "tyre", Vector3(w, r * 2.0, r * 2.0), def.get("colours", [])) != null:
 		return
 	var _rubber := DotPropToyLook.add(look, DotPropToyLook.torus(r * 0.5, r), _mat(0, 0.9), Transform3D(axle.scaled(Vector3(1.0, w / (r * 0.5), 1.0)), Vector3.ZERO))
 	var _hub := DotPropToyLook.add(look, DotPropToyLook.cylinder(r * 0.5, w * 0.5), _mat(1, 0.4), Transform3D(axle, Vector3.ZERO))
@@ -453,9 +461,11 @@ func _build_lamp() -> void:
 	var f := _make_fixed()
 	var _post := _shape(f, _box_shape(Vector3(0.14, _size.y, 0.14)), Transform3D(Basis.IDENTITY, Vector3(0, _size.y * 0.5, 0)))
 	if draw:
-		var _p := DotPropToyLook.rod(_visual, Vector3.ZERO, Vector3(0, _size.y, 0), 0.06, _mat(0, 0.4))
-		var _foot := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(0.16, 0.12), _mat(0, 0.4), Transform3D(Basis.IDENTITY, Vector3(0, 0.06, 0)))
-		var _hood := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(0.08, 0.16, 0.24), _mat(0, 0.4), Transform3D(Basis.IDENTITY, Vector3(0, _size.y + 0.1, 0)))
+		var tall := _size.y + 0.2
+		if DotPropToyLook.add_model(_visual, "lamp", Vector3(0.34, tall, 0.34), def.get("colours", []), Vector3(0, tall * 0.5, 0)) == null:
+			var _p := DotPropToyLook.rod(_visual, Vector3.ZERO, Vector3(0, _size.y, 0), 0.06, _mat(0, 0.4))
+			var _foot := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(0.16, 0.12), _mat(0, 0.4), Transform3D(Basis.IDENTITY, Vector3(0, 0.06, 0)))
+			var _hood := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(0.08, 0.16, 0.24), _mat(0, 0.4), Transform3D(Basis.IDENTITY, Vector3(0, _size.y + 0.1, 0)))
 		_bulb = DotPropToyLook.add(_visual, DotPropToyLook.sphere(0.13, 12), _mat(1), Transform3D(Basis.IDENTITY, Vector3(0, _size.y - 0.04, 0)))
 		_light = OmniLight3D.new()
 		_light.light_color = _colour(1)
@@ -474,9 +484,12 @@ func _build_fountain() -> void:
 	var _spout := _shape(f, _cyl_shape(0.1, 0.6), Transform3D(Basis.IDENTITY, Vector3(0, h + 0.3, 0)))
 	if draw:
 		var stone := _mat(0, 0.9)
-		var _wall := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(r, h, -1.0, 24), stone, Transform3D(Basis.IDENTITY, Vector3(0, h * 0.5, 0)))
+		var modelled := DotPropToyLook.add_model(_visual, "fountain_basin", Vector3(r * 2.0, h, r * 2.0), def.get("colours", []), Vector3(0, h * 0.5, 0)) != null
+		if not modelled:
+			var _wall := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(r, h, -1.0, 24), stone, Transform3D(Basis.IDENTITY, Vector3(0, h * 0.5, 0)))
 		_water = DotPropToyLook.add(_visual, DotPropToyLook.cylinder(r * 0.88, 0.02, -1.0, 24), DotPropToyLook.material(_colour(1), 0.1), Transform3D(Basis.IDENTITY, Vector3(0, h + 0.005, 0)))
-		var _col := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(0.1, 0.6, 0.07), stone, Transform3D(Basis.IDENTITY, Vector3(0, h + 0.3, 0)))
+		if not modelled or DotPropToyLook.add_model(_visual, "fountain_column", Vector3(0.5, 0.6, 0.5), def.get("colours", []), Vector3(0, h + 0.3, 0)) == null:
+			var _col := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(0.1, 0.6, 0.07), stone, Transform3D(Basis.IDENTITY, Vector3(0, h + 0.3, 0)))
 		_jets = CPUParticles3D.new()
 		_jets.amount = 90
 		_jets.lifetime = 1.0
@@ -498,8 +511,11 @@ func _build_horn() -> void:
 	_build_post(_size.y, 0.14)
 	if draw:
 		var brass := _mat(1, 0.3)
-		_flourish = DotPropToyLook.add(_visual, DotPropToyLook.cylinder(_size.x * 0.45, _size.z * 1.1, 0.05, 16), brass,
-			Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, _size.y + 0.05, _size.z * 0.4)))
+		_flourish = DotPropToyLook.add_model(_visual, "horn", Vector3(_size.x * 0.9, _size.x * 0.9, _size.z * 1.1), def.get("colours", []),
+			Vector3(0, _size.y + 0.05, _size.z * 0.4), Basis(Vector3.RIGHT, -PI * 0.5))
+		if _flourish == null:
+			_flourish = DotPropToyLook.add(_visual, DotPropToyLook.cylinder(_size.x * 0.45, _size.z * 1.1, 0.05, 16), brass,
+				Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, _size.y + 0.05, _size.z * 0.4)))
 		var _bulb_ := DotPropToyLook.add(_visual, DotPropToyLook.sphere(0.12, 10), DotPropToyLook.material(Color(0.12, 0.12, 0.12)), Transform3D(Basis.IDENTITY, Vector3(0, _size.y + 0.05, -0.18)))
 
 
@@ -518,6 +534,7 @@ func _build_bell() -> void:
 		_flourish = Node3D.new()
 		_flourish.position = Vector3(0, top - 0.07, 0)
 		_visual.add_child(_flourish)
-		var _bell := DotPropToyLook.add(_flourish, DotPropToyLook.cylinder(0.3, 0.42, 0.13, 16), _mat(1, 0.25), Transform3D(Basis.IDENTITY, Vector3(0, -0.3, 0)))
+		if DotPropToyLook.add_model(_flourish, "bell", Vector3(0.62, 0.52, 0.62), def.get("colours", []), Vector3(0, -0.28, 0)) == null:
+			var _bell := DotPropToyLook.add(_flourish, DotPropToyLook.cylinder(0.3, 0.42, 0.13, 16), _mat(1, 0.25), Transform3D(Basis.IDENTITY, Vector3(0, -0.3, 0)))
 		var _rope := DotPropToyLook.rod(_flourish, Vector3(0, -0.5, 0), Vector3(0, -1.2, 0), 0.015, DotPropToyLook.material(Color(0.8, 0.75, 0.6)))
 
