@@ -89,6 +89,7 @@ static func add_model(parent: Node3D, model: String, size: Vector3, colours: Arr
 	holder.transform = Transform3D(Basis.from_scale(scale) * turn, at - (Basis.from_scale(scale) * (turn * box.get_center())))
 	for m in meshes:
 		m.get_parent().remove_child(m)
+		m.owner = null
 		m.transform = Transform3D.IDENTITY
 		for surface in m.mesh.get_surface_count():
 			var source := m.mesh.surface_get_material(surface)
