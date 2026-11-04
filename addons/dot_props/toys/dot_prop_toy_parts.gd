@@ -172,6 +172,9 @@ func _build_ball() -> void:
 	if look == null:
 		return
 	var colours: Array = def.get("colours", [])
+	var diameter := Vector3.ONE * r * 2.0
+	if colours.size() < 3 and DotPropToyLook.add_model(look, "ball_bowling" if float(def.get("mass", 1.0)) > 3.0 else "ball", diameter, colours) != null:
+		return
 	if colours.size() >= 3:
 		var _m := DotPropToyLook.add(look, DotPropToyLook.painted_sphere(r, colours), DotPropToyLook.painted())
 	elif float(def.get("mass", 1.0)) > 3.0:
@@ -273,6 +276,8 @@ func _build_bag() -> void:
 		var _ft := DotPropToyLook.add(_visual, DotPropToyLook.box(Vector3(0.7, 0.08, 0.7)), steel, Transform3D(Basis.IDENTITY, post_at + Vector3(0, 0.04, 0)))
 		var look := _look_on(b)
 		var _c := DotPropToyLook.rod(look, Vector3(0, h * 0.5, 0), Vector3(0, hang, 0), 0.015, steel)
+		if DotPropToyLook.add_model(look, "bag", Vector3(r * 2.2, h, r * 2.2), def.get("colours", [])) != null:
+			return
 		var _bag := DotPropToyLook.add(look, DotPropToyLook.cylinder(r, h, -1.0, 14), _mat(0, 0.6))
 		var _cap := DotPropToyLook.add(look, DotPropToyLook.cylinder(r * 1.02, 0.12), steel, Transform3D(Basis.IDENTITY, Vector3(0, h * 0.5 - 0.06, 0)))
 
@@ -295,15 +300,20 @@ func _build_swing() -> void:
 	_radius = 0.32
 	var _s := _shape(b, _box_shape(seat))
 	if draw:
-		var frame := _mat(0, 0.5)
-		for side: float in [-1.0, 1.0]:
-			for leg: float in [-1.0, 1.0]:
-				var _l := DotPropToyLook.rod(_visual, Vector3(side * w * 0.5, 0, leg * 0.75), Vector3(side * w * 0.5, top, 0), 0.05, frame)
-		var _b := DotPropToyLook.rod(_visual, Vector3(-w * 0.5 - 0.05, top, 0), Vector3(w * 0.5 + 0.05, top, 0), 0.06, frame)
-		var look := _look_on(b)
-		var _seat := DotPropToyLook.add(look, DotPropToyLook.box(seat), _mat(1, 0.6))
-		for side: float in [-1.0, 1.0]:
-			var _r := DotPropToyLook.rod(look, Vector3(side * seat.x * 0.45, 0, 0), Vector3(side * seat.x * 0.45, rope, 0), 0.012, _mat(2))
+		var colours: Array = def.get("colours", [])
+		var framed := DotPropToyLook.add_model(_visual, "swing_frame", Vector3(w + 0.1, top + 0.06, 1.6), colours, Vector3(0, (top + 0.06) * 0.5, 0)) != null
+		var seated := DotPropToyLook.add_model(_look_on(b), "swing_seat", Vector3(seat.x, rope + 0.03, seat.z), colours, Vector3(0, (rope - 0.03) * 0.5, 0)) != null
+		if not framed:
+			var frame := _mat(0, 0.5)
+			for side: float in [-1.0, 1.0]:
+				for leg: float in [-1.0, 1.0]:
+					var _l := DotPropToyLook.rod(_visual, Vector3(side * w * 0.5, 0, leg * 0.75), Vector3(side * w * 0.5, top, 0), 0.05, frame)
+			var _b := DotPropToyLook.rod(_visual, Vector3(-w * 0.5 - 0.05, top, 0), Vector3(w * 0.5 + 0.05, top, 0), 0.06, frame)
+		if not seated:
+			var look := _look_on(b)
+			var _seat := DotPropToyLook.add(look, DotPropToyLook.box(seat), _mat(1, 0.6))
+			for side: float in [-1.0, 1.0]:
+				var _r := DotPropToyLook.rod(look, Vector3(side * seat.x * 0.45, 0, 0), Vector3(side * seat.x * 0.45, rope, 0), 0.012, _mat(2))
 
 
 func _build_seesaw() -> void:
@@ -319,8 +329,12 @@ func _build_seesaw() -> void:
 	# An end on the ground: the plank's half-length over the pivot's height, less the plank.
 	_limit = asin(clampf((pivot - 0.02) / (length * 0.5), 0.0, 1.0))
 	if draw:
-		var _pv := DotPropToyLook.add(_visual, _prism(Vector3(0.6, pivot, width * 0.7)), _mat(1), Transform3D(Basis.IDENTITY, Vector3(0, pivot * 0.5, 0)))
+		var colours: Array = def.get("colours", [])
+		if DotPropToyLook.add_model(_visual, "seesaw_base", Vector3(0.64, pivot, width * 0.85), colours, Vector3(0, pivot * 0.5, 0)) == null:
+			var _pv := DotPropToyLook.add(_visual, _prism(Vector3(0.6, pivot, width * 0.7)), _mat(1), Transform3D(Basis.IDENTITY, Vector3(0, pivot * 0.5, 0)))
 		var look := _look_on(b)
+		if DotPropToyLook.add_model(look, "seesaw_plank", Vector3(length, 0.465, width), colours, Vector3(0, 0.2425, 0)) != null:
+			return
 		var _p := DotPropToyLook.add(look, DotPropToyLook.box(Vector3(length, 0.1, width)), _mat(0, 0.6), Transform3D(Basis.IDENTITY, Vector3(0, 0.06, 0)))
 		for side: float in [-1.0, 1.0]:
 			var x := side * (length * 0.5 - 0.45)
@@ -346,6 +360,9 @@ func _build_spinner() -> void:
 	_sense_local = Vector3(r, 0, 0)
 	if draw:
 		var look := _look_on(b)
+		var _hub0 := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(0.15, deck - 0.06), _mat(2, 0.4), Transform3D(Basis.IDENTITY, Vector3(0, (deck - 0.06) * 0.5, 0)))
+		if DotPropToyLook.add_model(look, "roundabout", Vector3(r * 2.0, 1.13, r * 2.0), def.get("colours", []), Vector3(0, 0.465, 0)) != null:
+			return
 		# Eight sectors in the first two colours, painted on one disc.
 		var _deck := DotPropToyLook.add(look, DotPropToyLook.painted_disc(r, 0.1, [_colour(0), _colour(1)], 8), DotPropToyLook.painted(), Transform3D(Basis.IDENTITY, Vector3(0, -0.05, 0)))
 		var rail := _mat(2, 0.4)
@@ -355,7 +372,6 @@ func _build_spinner() -> void:
 			var _u := DotPropToyLook.rod(look, foot, foot + Vector3(0, 0.75, 0), 0.03, rail)
 			var _i := DotPropToyLook.rod(look, foot + Vector3(0, 0.75, 0), Vector3(0, 0.95, 0), 0.025, rail)
 		var _top := DotPropToyLook.add(look, DotPropToyLook.sphere(0.08, 8), rail, Transform3D(Basis.IDENTITY, Vector3(0, 0.95, 0)))
-		var _h := DotPropToyLook.add(_visual, DotPropToyLook.cylinder(0.15, deck - 0.06), rail, Transform3D(Basis.IDENTITY, Vector3(0, (deck - 0.06) * 0.5, 0)))
 
 
 func _build_wobble() -> void:
@@ -420,12 +436,11 @@ func _build_bouncer() -> void:
 		var a := TAU * float(i) / 4.0 + PI * 0.25
 		var _leg := _shape(f, _box_shape(Vector3(0.08, top, 0.08)), Transform3D(Basis.IDENTITY, Vector3(cos(a) * r * 0.9, top * 0.5, sin(a) * r * 0.9)))
 	if draw:
-		var _legs := Node3D.new()
-		_visual.add_child(_legs)
-		for i in 4:
-			var a := TAU * float(i) / 4.0 + PI * 0.25
-			var _l := DotPropToyLook.rod(_visual, Vector3(cos(a) * r * 0.9, 0, sin(a) * r * 0.9), Vector3(cos(a) * r * 0.9, top, sin(a) * r * 0.9), 0.04, _mat(0, 0.4))
-		var _rim := DotPropToyLook.add(_visual, DotPropToyLook.torus(r * 0.86, r), _mat(1, 0.6), Transform3D(Basis.IDENTITY, Vector3(0, top, 0)))
+		if DotPropToyLook.add_model(_visual, "trampoline", Vector3(r * 2.0, top + 0.084, r * 2.0), def.get("colours", []), Vector3(0, (top + 0.084) * 0.5, 0)) == null:
+			for i in 4:
+				var a := TAU * float(i) / 4.0 + PI * 0.25
+				var _l := DotPropToyLook.rod(_visual, Vector3(cos(a) * r * 0.9, 0, sin(a) * r * 0.9), Vector3(cos(a) * r * 0.9, top, sin(a) * r * 0.9), 0.04, _mat(0, 0.4))
+			var _rim := DotPropToyLook.add(_visual, DotPropToyLook.torus(r * 0.86, r), _mat(1, 0.6), Transform3D(Basis.IDENTITY, Vector3(0, top, 0)))
 		_flourish = DotPropToyLook.add(_visual, DotPropToyLook.cylinder(r * 0.87, 0.03, -1.0, 24), _mat(0, 0.9), Transform3D(Basis.IDENTITY, Vector3(0, top - 0.02, 0)))
 
 
@@ -433,7 +448,8 @@ func _build_pad() -> void:
 	var f := _make_fixed()
 	var _slab := _shape(f, _box_shape(_size), Transform3D(Basis.IDENTITY, Vector3(0, _size.y * 0.5, 0)))
 	if draw:
-		var _base := DotPropToyLook.add(_visual, DotPropToyLook.box(_size), _mat(0, 0.5), Transform3D(Basis.IDENTITY, Vector3(0, _size.y * 0.5, 0)))
+		if DotPropToyLook.add_model(_visual, "pad", Vector3(_size.x, _size.y + 0.007, _size.z), def.get("colours", []), Vector3(0, (_size.y + 0.007) * 0.5, 0)) == null:
+			var _base := DotPropToyLook.add(_visual, DotPropToyLook.box(_size), _mat(0, 0.5), Transform3D(Basis.IDENTITY, Vector3(0, _size.y * 0.5, 0)))
 		# An arrow along the way it throws (+z), lying on the top.
 		var arrow := DotPropToyLook.material(_colour(1), 0.5, 0.6)
 		var _shaft := DotPropToyLook.add(_visual, DotPropToyLook.box(Vector3(_size.x * 0.18, 0.02, _size.z * 0.45)), arrow, Transform3D(Basis.IDENTITY, Vector3(0, _size.y + 0.01, -_size.z * 0.12)))
@@ -441,19 +457,21 @@ func _build_pad() -> void:
 			Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, _size.y + 0.01, _size.z * 0.22)))
 
 
-func _build_post(height: float, width: float) -> void:
+func _build_post(height: float, width: float, hidden: bool = false) -> void:
 	var f := _make_fixed()
 	var _post := _shape(f, _box_shape(Vector3(width, height, width)), Transform3D(Basis.IDENTITY, Vector3(0, height * 0.5, 0)))
-	if draw:
+	if draw and not hidden:
 		var _p := DotPropToyLook.add(_visual, DotPropToyLook.box(Vector3(width, height, width)), _mat(0, 0.5), Transform3D(Basis.IDENTITY, Vector3(0, height * 0.5, 0)))
 
 
 func _build_switch() -> void:
-	_build_post(_size.y, _size.x)
+	var modelled := draw and DotPropToyLook.add_model(_visual, "switch", Vector3(_size.x * 1.82, _size.y + 0.05, _size.z * 1.82), def.get("colours", []), Vector3(0, (_size.y + 0.05) * 0.5, 0)) != null
+	_build_post(_size.y, _size.x, modelled)
 	# The button is what a person aims the use key at: solid, over the post's top.
 	var _button := _shape(fixed, _box_shape(Vector3(_size.x * 1.3, 0.16, _size.z * 1.3)), Transform3D(Basis.IDENTITY, Vector3(0, _size.y + 0.08, 0)))
-	if draw:
+	if draw and not modelled:
 		var _plate := DotPropToyLook.add(_visual, DotPropToyLook.box(Vector3(_size.x * 1.3, 0.04, _size.z * 1.3)), _mat(0, 0.4), Transform3D(Basis.IDENTITY, Vector3(0, _size.y + 0.02, 0)))
+	if draw:
 		_cap = DotPropToyLook.add(_visual, DotPropToyLook.cylinder(_size.x * 0.4, 0.08), _mat(1, 0.3), Transform3D(Basis.IDENTITY, Vector3(0, _size.y + 0.08, 0)))
 
 

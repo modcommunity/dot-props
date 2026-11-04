@@ -206,3 +206,187 @@ lathe(bm, horn, 20)
 bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
 ob = finish("horn_body", bm)
 export([ob], "horn")
+
+
+# ---- second batch: swing, see-saw, roundabout, bag, trampoline, pad, switch, balls. Built at the stock toys' sizes in metres.
+def faces_of(bm, verts):
+    return {f for v in verts for f in v.link_faces}
+
+
+def bbox(bm, c, s, m, bev=0.0):
+    """A box, optionally with its edges bevelled."""
+    mi = list(PAL).index(m)
+    r = bmesh.ops.create_cube(bm, size=1.0)
+    verts = r["verts"]
+    bmesh.ops.scale(bm, verts=verts, vec=s)
+    bmesh.ops.translate(bm, verts=verts, vec=c)
+    for f in faces_of(bm, verts):
+        f.material_index = mi
+    if bev > 0:
+        edges = list({e for v in verts for e in v.link_edges})
+        bmesh.ops.bevel(bm, geom=edges, offset=bev, segments=1, affect="EDGES")
+
+
+def rod(bm, a, b, radius, m, seg=8):
+    a, b = Vector(a), Vector(b)
+    d = b - a
+    r = bmesh.ops.create_cone(bm, cap_ends=True, segments=seg, radius1=radius, radius2=radius, depth=d.length)
+    verts = r["verts"]
+    rot = Vector((0, 0, 1)).rotation_difference(d.normalized()).to_matrix().to_4x4()
+    bmesh.ops.transform(bm, matrix=rot, verts=verts)
+    bmesh.ops.translate(bm, verts=verts, vec=(a + b) * 0.5)
+    mi = list(PAL).index(m)
+    for f in faces_of(bm, verts):
+        f.material_index = mi
+
+
+def torus(bm, major, minor, z, m, seg=32, tube=8):
+    mi = list(PAL).index(m)
+    ring = []
+    for i in range(seg):
+        a = i / seg * math.tau
+        row = []
+        for j in range(tube):
+            t = j / tube * math.tau
+            rr = major + math.cos(t) * minor
+            row.append(bm.verts.new((math.cos(a) * rr, math.sin(a) * rr, z + math.sin(t) * minor)))
+        ring.append(row)
+    for i in range(seg):
+        for j in range(tube):
+            f = bm.faces.new((ring[i][j], ring[(i + 1) % seg][j], ring[(i + 1) % seg][(j + 1) % tube], ring[i][(j + 1) % tube]))
+            f.material_index = mi
+
+
+def clean(bm):
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+
+
+# swing frame: A-frame legs on foot pads, top bar, hanger rings. 2.1 x 2.46 x 1.6 m
+bm = bmesh.new()
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        rod(bm, (sx * 1.0, sy * 0.75, 0.04), (sx * 1.0, 0, 2.4), 0.05, "c0")
+        bbox(bm, (sx * 1.0, sy * 0.75, 0.02), (0.16, 0.16, 0.04), "dark", 0.01)
+rod(bm, (-1.05, 0, 2.4), (1.05, 0, 2.4), 0.06, "c0", 10)
+for sx in (-1, 1):
+    bbox(bm, (sx * 1.0, 0, 2.4), (0.12, 0.2, 0.2), "steel", 0.02)
+clean(bm)
+export([finish("swing_frame", bm)], "swing_frame")
+
+# swing seat with its two ropes: seat y 0, ropes up to 1.9. 0.6 x 1.93 x 0.3
+bm = bmesh.new()
+bbox(bm, (0, 0, 0), (0.6, 0.3, 0.06), "c1", 0.02)
+for sx in (-0.27, 0.27):
+    rod(bm, (sx, 0, 0.03), (sx, 0, 1.9), 0.014, "rope", 6)
+    bbox(bm, (sx, 0, 0.0), (0.05, 0.05, 0.08), "steel")
+clean(bm)
+export([finish("swing_seat", bm)], "swing_seat")
+
+# see-saw plank with end stripes and two grab bars: 3.2 x 0.4, handles to 0.475
+bm = bmesh.new()
+bbox(bm, (0, 0, 0.06), (3.2, 0.4, 0.1), "c0", 0.025)
+for sx in (-1, 1):
+    bbox(bm, (sx * 1.5, 0, 0.0605), (0.2, 0.402, 0.102), "dark", 0.025)
+    x = sx * 1.15
+    for sy in (-1, 1):
+        rod(bm, (x, sy * 0.14, 0.1), (x, sy * 0.14, 0.45), 0.025, "c1")
+    rod(bm, (x, -0.14, 0.45), (x, 0.14, 0.45), 0.025, "c1")
+clean(bm)
+export([finish("seesaw_plank", bm)], "seesaw_plank")
+
+# see-saw fulcrum: a trapezoid block with an axle: 0.6 x 0.34 x 0.59
+bm = bmesh.new()
+pts = [(-0.3, 0.0), (0.3, 0.0), (0.07, 0.55), (-0.07, 0.55)]
+lo = [bm.verts.new((x, -0.14, z)) for x, z in pts]
+hi = [bm.verts.new((x, 0.14, z)) for x, z in pts]
+for f in (lo[::-1], hi):
+    bm.faces.new(f).material_index = list(PAL).index("c1")
+for i in range(4):
+    j = (i + 1) % 4
+    bm.faces.new((lo[i], lo[j], hi[j], hi[i])).material_index = list(PAL).index("c1")
+rod(bm, (0, -0.17, 0.51), (0, 0.17, 0.51), 0.04, "steel", 10)
+bbox(bm, (0, 0, 0.02), (0.64, 0.3, 0.04), "dark", 0.01)
+clean(bm)
+bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+export([finish("seesaw_base", bm)], "seesaw_base")
+
+# roundabout: sector deck (c0/c1 by wedge), rim, four rail loops to a central cap. r 1.4
+bm = bmesh.new()
+deck = [(0.0, 0.0, "c0"), (1.4, 0.0, "c0"), (1.4, -0.1, "c0"), (0.0, -0.1, "c0")]
+lathe(bm, deck, 32)
+clean(bm)
+for f in bm.faces:
+    n = f.normal
+    if n.z > 0.9:
+        c = f.calc_center_median()
+        k = int((math.atan2(c.y, c.x) % math.tau) / math.tau * 8)
+        f.material_index = list(PAL).index("c1" if k % 2 else "c0")
+for i in range(4):
+    a = math.tau * i / 4 + math.pi / 4
+    foot = (math.cos(a) * 1.12, math.sin(a) * 1.12, 0.0)
+    rod(bm, foot, (foot[0], foot[1], 0.75), 0.03, "steel")
+    rod(bm, (foot[0], foot[1], 0.75), (0, 0, 0.95), 0.025, "steel")
+bbox(bm, (0, 0, 0.99), (0.16, 0.16, 0.08), "steel", 0.02)
+clean(bm)
+export([finish("roundabout", bm)], "roundabout")
+
+# punching bag: faintly bulged, two straps and capped ends. r 0.21, h 1
+bm = bmesh.new()
+bagp = [(0.0, 0.0, "c0"), (0.17, 0.0, "steel"), (0.2, 0.02, "c0"), (0.215, 0.12, "c0"), (0.22, 0.14, "c1"), (0.22, 0.2, "c1"),
+        (0.22, 0.22, "c0"), (0.225, 0.5, "c0"), (0.22, 0.78, "c0"), (0.22, 0.8, "c1"), (0.22, 0.86, "c1"),
+        (0.215, 0.88, "c0"), (0.2, 0.98, "steel"), (0.17, 1.0, "steel"), (0.0, 1.0, "steel")]
+lathe(bm, bagp, 20)
+clean(bm)
+export([finish("bag", bm)], "bag")
+
+# trampoline frame (the bed stays code: it is what dips): legs, brace ring, padded rim. r 1.2, top 0.45
+bm = bmesh.new()
+for i in range(4):
+    a = math.tau * i / 4 + math.pi / 4
+    x, y = math.cos(a) * 1.08, math.sin(a) * 1.08
+    rod(bm, (x, y, 0.02), (x, y, 0.45), 0.04, "c0")
+    bbox(bm, (x, y, 0.01), (0.14, 0.14, 0.02), "dark")
+torus(bm, 1.08, 0.015, 0.18, "c0", 28, 5)
+torus(bm, 1.116, 0.084, 0.45, "c1", 40, 10)
+clean(bm)
+export([finish("trampoline", bm)], "trampoline")
+
+# bounce pad: bevelled slab, raised border, corner bolts. 1.2 x 0.125 x 1.2
+bm = bmesh.new()
+bbox(bm, (0, 0, 0.06), (1.2, 1.2, 0.12), "c0", 0.02)
+for sx in (-1, 1):
+    bbox(bm, (sx * 0.55, 0, 0.122), (0.04, 1.08, 0.006), "c1")
+    bbox(bm, (0, sx * 0.55, 0.122), (1.08, 0.04, 0.006), "c1")
+    for sy in (-1, 1):
+        rod(bm, (sx * 0.5, sy * 0.5, 0.12), (sx * 0.5, sy * 0.5, 0.127), 0.03, "steel", 8)
+clean(bm)
+export([finish("pad", bm)], "pad")
+
+# switch post: flange, post, two warning bands, plate with bolts. 0.4 x 1.09 x 0.4
+bm = bmesh.new()
+bbox(bm, (0, 0, 0.025), (0.4, 0.4, 0.05), "dark", 0.01)
+bbox(bm, (0, 0, 0.525), (0.22, 0.22, 0.95), "c0", 0.01)
+for z in (0.3, 0.38):
+    bbox(bm, (0, 0, z), (0.235, 0.235, 0.04), "c1")
+bbox(bm, (0, 0, 1.07), (0.286, 0.286, 0.04), "c0", 0.008)
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        rod(bm, (sx * 0.11, sy * 0.11, 1.09), (sx * 0.11, sy * 0.11, 1.1), 0.014, "steel", 6)
+clean(bm)
+export([finish("switch", bm)], "switch")
+
+# football: panels of c0 with twelve c1 patches; bowling ball: c0 with three finger holes. diameter 1
+def ico(name, patch_mat, dirs, thresh, sub=3):
+    bm = bmesh.new()
+    bmesh.ops.create_icosphere(bm, subdivisions=sub, radius=0.5)
+    mi = list(PAL).index(patch_mat)
+    for f in bm.faces:
+        n = f.calc_center_median().normalized()
+        if any(n.dot(d.normalized()) > thresh for d in dirs):
+            f.material_index = mi
+    export([finish(name, bm)], name)
+
+t = (1 + 5 ** 0.5) / 2
+ico("ball", "c1", [Vector(v) for v in ((-1, t, 0), (1, t, 0), (-1, -t, 0), (1, -t, 0), (0, -1, t), (0, 1, t),
+                                       (0, -1, -t), (0, 1, -t), (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1))], 0.9)
+ico("ball_bowling", "c1", [Vector(v) for v in ((-0.22, -0.8, 0.55), (0, -0.84, 0.55), (0.22, -0.8, 0.55))], 0.985, 4)

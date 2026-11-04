@@ -11,6 +11,7 @@ extends Node3D
 
 var _out := "res://screenshots/toys.png"
 var _kick := false
+var _close := false
 
 
 func _ready() -> void:
@@ -19,6 +20,8 @@ func _ready() -> void:
 			_out = arg.trim_prefix("--out=")
 		elif arg == "--kick":
 			_kick = true
+		elif arg == "--close":
+			_close = true
 	_run.call_deferred()
 
 
@@ -84,6 +87,19 @@ func _run() -> void:
 			await get_tree().physics_frame
 	for _i in 4:
 		await get_tree().process_frame
+	if _close:
+		# One frame per toy, near enough to judge its model: <out>_<id>.png.
+		for t in toys.toys:
+			var size: Vector3 = t.def.get("size", Vector3.ONE)
+			var reach := maxf(maxf(size.x, size.z), size.y) * 0.9 + 0.5
+			var middle: Vector3 = t.global_position + Vector3(0, minf(size.y, 2.6) * 0.5, 0)
+			camera.look_at_from_position(middle + Vector3(0.7, 0.45, 1.0).normalized() * reach * 1.6, middle)
+			for _i in 3:
+				await get_tree().process_frame
+			var shot := get_viewport().get_texture().get_image()
+			var _e := shot.save_png(ProjectSettings.globalize_path(_out.trim_suffix(".png") + "_%s.png" % t.def.get("id", t.index)))
+		get_tree().quit()
+		return
 	var image := get_viewport().get_texture().get_image()
 	var path := ProjectSettings.globalize_path(_out)
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
