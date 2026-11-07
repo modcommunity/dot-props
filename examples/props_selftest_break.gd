@@ -541,3 +541,135 @@ func _test_toy_catalogue() -> void:
 ## A floor, and a box of every stock toy on it in a row, four metres apart. A hundred metres
 ## up, clear of whatever the earlier sections left falling (a crate under the tyre flung it
 ## three hundred metres).
+
+
+class _Liquid:
+	var density := 1000.0
+	var dampening := 2.0
+
+
+func _test_buoyancy() -> void:
+	_section("buoyancy and drag in a liquid")
+
+	var water := _Liquid.new()
+	var surface := func(material: Variant) -> Variant: return water if material == &"water" else null
+	var liquids := [{"box": AABB(Vector3(-5, -5, -5), Vector3(10, 5, 10)), "material": &"water"}]
+
+	_check(is_equal_approx(DotPropBuoyancy.volume_of(Vector3(1, 2, 3), 2.0, "box"), 48.0), "a box's volume is its extent scaled cubed")
+	_check(is_equal_approx(DotPropBuoyancy.volume_of(Vector3(2, 2, 2), 1.0, "sphere"), 8.0 * PI / 6.0), "a sphere is pi/6 of its box")
+	_check(is_equal_approx(DotPropBuoyancy.volume_of(Vector3(2, 2, 2), 1.0, "cylinder"), 8.0 * PI / 4.0), "a cylinder is pi/4 of its box")
+
+	var box := liquids[0]["box"] as AABB
+	_check(is_equal_approx(DotPropBuoyancy.submerged_fraction(Vector3(0, 0, 0), 0.5, box), 0.5), "a body at the surface is half under")
+	_check(DotPropBuoyancy.submerged_fraction(Vector3(0, 2, 0), 0.5, box) == 0.0, "above the surface is not under")
+	_check(DotPropBuoyancy.submerged_fraction(Vector3(9, -1, 0), 0.5, box) == 0.0, "beside the liquid is not under")
+
+	var floater := RigidBody3D.new()
+	floater.mass = 1.0
+	floater.gravity_scale = 0.0
+	floater.add_child(_unit_shape())
+	_world.add_child(floater)
+	floater.global_position = Vector3(0, -1.0, 0)
+	_check(DotPropBuoyancy.apply(floater, 1.0, 0.25, 100.0, liquids, surface, 1.0 / 60.0, 9.8), "a light body in water is acted on")
+	await get_tree().physics_frame
+	_check(floater.linear_velocity.y > 0.0, "a body lighter than water rises")
+	_check(floater.linear_velocity.y <= DotPropBuoyancy.RISE_SPEED + 0.001, "and never faster than the rise speed", str(floater.linear_velocity.y))
+
+	var sinker := RigidBody3D.new()
+	sinker.mass = 1.0
+	sinker.gravity_scale = 0.0
+	sinker.add_child(_unit_shape())
+	_world.add_child(sinker)
+	sinker.global_position = Vector3(0, -1.0, 0)
+	var _acted := DotPropBuoyancy.apply(sinker, 0.1, 0.25, 5000.0, liquids, surface, 1.0 / 60.0, 9.8)
+	await get_tree().physics_frame
+	_check(sinker.linear_velocity.y < 0.0, "a body denser than water sinks, whatever its catalogue mass")
+
+	var dry := RigidBody3D.new()
+	_world.add_child(dry)
+	dry.global_position = Vector3(0, 3.0, 0)
+	_check(not DotPropBuoyancy.apply(dry, 0.1, 0.25, 100.0, liquids, surface, 1.0 / 60.0, 9.8), "a body out of the liquid is left alone")
+	_check(not DotPropBuoyancy.apply(floater, 0.1, 0.25, 100.0, [{"box": box, "material": &"oil"}], surface, 1.0 / 60.0, 9.8), "a liquid the lookup does not know acts on nothing")
+
+	floater.queue_free()
+	sinker.queue_free()
+	dry.queue_free()
+	_done()
+
+
+func _test_panes() -> void:
+	_section("breakable panes")
+
+	var map := Node3D.new()
+	_world.add_child(map)
+	var thin := _pane_box(map, 3, Vector3(0, 0, 0), Vector3(4, 4, 0.1), &"glass")
+	var _stone := _pane_box(map, 4, Vector3(10, 0, 0), Vector3(4, 4, 0.1), &"stone")
+
+	var panes := DotPropPanes.index_map(map, &"pg_box",
+		func(n: Node) -> StringName: return n.get_meta(&"mat"),
+		func(m: StringName) -> float: return 20.0 if m == &"glass" else 0.0)
+	_check(panes.size() == 1 and panes.has(3), "only boxes whose material breaks are panes")
+	_check(DotPropPanes.index_map(null, &"pg_box", Callable(), Callable()).is_empty(), "no map, no panes")
+
+	_check(DotPropPanes.bounds_of(thin).size.is_equal_approx(Vector3(4, 4, 0.1)), "bounds come from the box shape")
+	_check(DotPropPanes.normal_of(thin).is_equal_approx(Vector3(0, 0, 1)), "the normal is the thinnest axis")
+
+	_check(DotPropPanes.damage(panes, 9, 5.0).is_empty(), "damage to no pane is nothing")
+	var hit := DotPropPanes.damage(panes, 3, 5.0)
+	_check(is_equal_approx(float(hit["before"]), 20.0) and not hit["broke"], "a small hit scratches it")
+	_check(DotPropPanes.damage(panes, 3, 15.0)["broke"], "enough breaks it")
+
+	panes = DotPropPanes.index_map(map, &"pg_box",
+		func(n: Node) -> StringName: return n.get_meta(&"mat"),
+		func(m: StringName) -> float: return 20.0 if m == &"glass" else 0.0)
+	var near := DotPropPanes.blast_hits(panes, Vector3(0, 0, 1.0), 5.0, 100.0)
+	var far := DotPropPanes.blast_hits(panes, Vector3(0, 0, 50.0), 5.0, 100.0)
+	_check(near.size() == 1 and float(near[0][1]) > 50.0, "a blast beside a pane hurts it hard")
+	_check(far.is_empty() and DotPropPanes.blast_hits(panes, Vector3.ZERO, 0.0, 1.0).is_empty(), "a far blast, or no radius, hurts nothing")
+
+	var body := RigidBody3D.new()
+	body.mass = 2.0
+	var shape := CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	body.add_child(shape)
+	_world.add_child(body)
+	body.global_position = Vector3(0, 0, 0.5)
+	var fast := {1: Vector3(0, 0, -10.0)}
+	var slow := {1: Vector3(0, 0, -2.0)}
+	var along := {1: Vector3(10.0, 0, 0)}
+	var walker := [[7, Vector3(0, 0, 0.3)]]
+	_check(DotPropPanes.impact_hits(panes, [[1, body]], [], fast).size() == 1, "a body thrown into a pane hits it")
+	_check(is_equal_approx(float(DotPropPanes.impact_hits(panes, [[1, body]], [], fast)[0][1]), 10.0), "for mass times speed over two")
+	_check(DotPropPanes.impact_hits(panes, [[1, body]], [], slow).is_empty(), "a slow one does not")
+	_check(DotPropPanes.impact_hits(panes, [[1, body]], [], along).is_empty(), "moving along the pane is not into it")
+	var run := DotPropPanes.impact_hits(panes, [], walker, {7: Vector3(0, 0, -8.0)})
+	_check(run.size() == 1 and is_equal_approx(float(run[0][1]), 20.0), "a walker running into it breaks it outright")
+
+	var plan := DotPropPanes.shard_plan(AABB(Vector3(-2, -2, 0), Vector3(4, 4, 0.1)))
+	_check(plan.size() == DotPropPanes.SHARDS_MAX, "a big pane throws the most shards")
+	_check(plan == DotPropPanes.shard_plan(AABB(Vector3(-2, -2, 0), Vector3(4, 4, 0.1))), "and the same ones on every machine")
+	_check(DotPropPanes.shard_plan(AABB(Vector3.ZERO, Vector3(0.1, 0.1, 0.1))).size() == 3, "a small one throws at least three")
+
+	body.queue_free()
+	map.queue_free()
+	_done()
+
+
+func _pane_box(parent: Node3D, index: int, at: Vector3, size: Vector3, material: StringName) -> StaticBody3D:
+	var b := StaticBody3D.new()
+	var s := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	s.shape = box
+	b.add_child(s)
+	b.set_meta(&"pg_box", index)
+	b.set_meta(&"mat", material)
+	parent.add_child(b)
+	b.global_position = at
+	return b
+
+
+func _unit_shape() -> CollisionShape3D:
+	var s := CollisionShape3D.new()
+	s.shape = BoxShape3D.new()
+	return s
