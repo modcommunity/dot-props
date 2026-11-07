@@ -35,7 +35,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 
 ## Running and testing
 
-- The family's two steps ([game-dev/CLAUDE.md](../../CLAUDE.md#validating-anything)), then `godot --headless --path . res://examples/props_selftest.tscn`.
+- The family's two steps ([family CLAUDE.md](../../CLAUDE.md#validating-anything)), then `godot --headless --path . res://examples/props_selftest.tscn`.
 - A limit must be tested against real bodies in a real tree: one that counted a dictionary would pass while the scene filled up.
 - A physics assertion reads after the step that consumed the impulse, and says what it excludes, or it is measuring gravity. [damage-and-carry](docs/damage-and-carry.md#testing-physics)
 - game-playground (spawning, tools, IO), mg-buses-from-hell (damage, carry), mg-prop-hunt and game-hide-n-seek (`hunt/`), game-hide-n-seek (`toys/`) are the consumers; the mass bug was found from a game.
