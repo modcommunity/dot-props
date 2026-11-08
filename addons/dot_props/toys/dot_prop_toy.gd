@@ -1,7 +1,7 @@
-class_name DotPropToy
+class_name DotPropBody
 extends "dot_prop_toy_parts.gd"
 
-## One toy on a map, built from a [DotPropToyCatalogue] definition by a [DotPropToyBox]: its
+## One toy on a map, built from a [DotPropBodyCatalogue] definition by a [DotPropBodyBox]: its
 ## bodies, its joints, how it is drawn, and what a push, a use, a shot or a person standing on
 ## it does to it.
 ##
@@ -54,7 +54,7 @@ func build(p_def: Dictionary, p_placement: Dictionary, p_layers: Dictionary) -> 
 		&"fountain": _build_fountain()
 		&"horn": _build_horn()
 		&"bell": _build_bell()
-	pushable = kind == &"spinner" or DotPropToyCatalogue.LOOSE.has(kind)
+	pushable = kind == &"spinner" or DotPropBodyCatalogue.LOOSE.has(kind)
 
 	if body != null:
 		rest = body.global_transform
@@ -250,7 +250,7 @@ func push_from(feet: Vector3, velocity: Vector3, radius: float, height: float, s
 		return false
 	if kind == &"spinner":
 		return _push_rim(feet, velocity, radius, height)
-	if not DotPropToyCatalogue.LOOSE.has(kind):
+	if not DotPropBodyCatalogue.LOOSE.has(kind):
 		return false
 	var centre := body.global_position
 	var reach := _radius + radius
@@ -559,7 +559,7 @@ func _show_on() -> void:
 	if _cap != null:
 		_cap.material_override = _mat(2 if on else 1, 0.3)
 	if _bulb != null:
-		_bulb.material_override = DotPropToyLook.material(_colour(1), 0.3, 2.5 if on else 0.0)
+		_bulb.material_override = DotPropBodyLook.material(_colour(1), 0.3, 2.5 if on else 0.0)
 	if _light != null:
 		_light.visible = on
 	if _jets != null:

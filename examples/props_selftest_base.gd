@@ -134,7 +134,7 @@ func _toy_world(authoritative: bool) -> Array:
 	shape.position = Vector3(0, -0.5, 0)
 	floor_body.add_child(shape)
 	holder.add_child(floor_body)
-	var toys := DotPropToyBox.new()
+	var toys := DotPropBodyBox.new()
 	toys.authoritative = authoritative
 	toys.draw = true
 	# world 1, loose 2, solid 4, footprints 8.
@@ -145,7 +145,7 @@ func _toy_world(authoritative: bool) -> Array:
 	toys.footprint_layer = 8
 	toys.aim_mask = 1 | 2 | 4
 	holder.add_child(toys)
-	toys.catalogue = DotPropToyCatalogue.stock()
+	toys.catalogue = DotPropBodyCatalogue.stock()
 	var placements: Array = []
 	var x := 0.0
 	for id in toys.catalogue.ids():
@@ -160,7 +160,7 @@ func _toy_world(authoritative: bool) -> Array:
 	return [holder, toys, built]
 
 
-func _index(toys: DotPropToyBox, id: String) -> int:
+func _index(toys: DotPropBodyBox, id: String) -> int:
 	for t in toys.toys:
 		if String(t.def["id"]) == id:
 			return t.index
@@ -174,7 +174,7 @@ func _step_physics(frames: int) -> void:
 
 func _scatter_box(count: int) -> Array:
 	var made := _toy_world(true)
-	var toys: DotPropToyBox = made[1]
+	var toys: DotPropBodyBox = made[1]
 	toys.clear()
 	var ids := toys.catalogue.ids()
 	var rng := RandomNumberGenerator.new()

@@ -1,4 +1,4 @@
-class_name DotPropToySounds
+class_name DotPropBodySounds
 extends RefCounted
 
 ## The files behind the stock toys' sound ids, as plain data a game turns into its own audio
@@ -7,7 +7,7 @@ extends RefCounted
 ##
 ## [b]Data, not dot-audio definitions[/b], because this addon does not depend on dot-audio: a
 ## game makes one positional definition per row (path, variants, pitch range, gain), and the ids
-## a [DotPropToy] emits then play. The same shape as dot-player-char's death sounds.
+## a [DotPropBody] emits then play. The same shape as dot-player-char's death sounds.
 
 const BOUNCE := &"toy_bounce"
 const THUMP := &"toy_thump"
@@ -27,7 +27,7 @@ const HORN := &"toy_horn"
 ## The directory the files are in, found from this script so a pack mounted under another root
 ## still finds them.
 static func directory() -> String:
-	var here: String = (DotPropToySounds as Script).resource_path
+	var here: String = (DotPropBodySounds as Script).resource_path
 	return here.get_base_dir().path_join("sounds")
 
 

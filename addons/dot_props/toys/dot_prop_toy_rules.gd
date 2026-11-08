@@ -1,16 +1,32 @@
-class_name DotPropToyRules
+class_name DotPropBodyRules
 extends Resource
 
 ## What a server allows of a map's toys: whether there are any, how many may be simulating at
-## once, and how hard a person's walk pushes one. The `sv_toys*` cvars.
+## once, and how hard a person's walk pushes one. The `sv_physprops*` cvars; the old `sv_toys*`
+## names stay as deprecated aliases (a saved config or a console script that sets them still works).
 ##
 ## [b]REPLICATED[/b] when a game binds them (the client hides the toys the server took away),
 ## and followed through the link like dot-player-char's ragdoll rules, duck-typed the same
 ## way: dot-server is not a dependency here.
 
-const CVAR_ENABLED := "sv_toys"
-const CVAR_AWAKE := "sv_toys_awake"
-const CVAR_PUSH := "sv_toys_push"
+const CVAR_ENABLED := "sv_physprops"
+const CVAR_AWAKE := "sv_physprops_awake"
+const CVAR_PUSH := "sv_physprops_push"
+
+## The names before 2026-11-08, kept as aliases: each is registered next to its new name, applies
+## to the same rule and follows it. (`sv_props` is taken by g2gfast, hence `sv_physprops`.)
+const LEGACY_CVAR_ENABLED := "sv_toys"
+const LEGACY_CVAR_AWAKE := "sv_toys_awake"
+const LEGACY_CVAR_PUSH := "sv_toys_push"
+
+## Legacy name -> current name.
+const LEGACY_ALIASES := {
+	LEGACY_CVAR_ENABLED: CVAR_ENABLED,
+	LEGACY_CVAR_AWAKE: CVAR_AWAKE,
+	LEGACY_CVAR_PUSH: CVAR_PUSH,
+}
+
+var _bound: Dictionary = {}
 
 ## Whether a map's toys are there at all. Off, a map plays as if it had none.
 @export var enabled: bool = true
@@ -39,21 +55,43 @@ func cvar_specs() -> Array[Dictionary]:
 	]
 
 
-## Registers the `sv_toys*` cvars through [param add] (a server module's `add_cvar`, or anything
+## The deprecated `sv_toys*` specs: same values, pointing at the new names.
+func legacy_cvar_specs() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for spec in cvar_specs():
+		var legacy := spec.duplicate()
+		var current: String = spec["name"]
+		for old: String in LEGACY_ALIASES:
+			if LEGACY_ALIASES[old] == current:
+				legacy["name"] = old
+		legacy["description"] = "Deprecated alias of %s. %s" % [current, spec["description"]]
+		out.append(legacy)
+	return out
+
+
+## The current name for [param cvar_name]: itself, or what a legacy alias points at.
+static func canonical_name(cvar_name: String) -> String:
+	return String(LEGACY_ALIASES.get(cvar_name, cvar_name))
+
+
+## Registers the `sv_physprops*` cvars (and the deprecated `sv_toys*` aliases) through [param add] (a server module's `add_cvar`, or anything
 ## shaped `(name, default, description, flags) -> cvar`) and keeps these rules on them.
 func bind_cvars(add: Callable, flags: int = 0) -> Array:
 	var made: Array = []
-	for spec in cvar_specs():
+	var specs := cvar_specs()
+	specs.append_array(legacy_cvar_specs())
+	for spec in specs:
 		var cvar_name: String = spec["name"]
 		var made_cvar: Variant = add.call(cvar_name, String(spec["value"]), String(spec["description"]), flags)
 		if not (made_cvar is Object) or made_cvar == null:
 			continue
 		var cv := made_cvar as Object
+		_bound[cvar_name] = cv
 		if spec.has("min") and cv.has_method(&"with_range"):
 			cv.call(&"with_range", float(spec["min"]), float(spec["max"]))
 		if cv.has_signal(&"changed"):
 			cv.connect(&"changed", _on_cvar_changed.bind(cvar_name))
-		if cv.has_method(&"get_string"):
+		if cv.has_method(&"get_string") and not LEGACY_ALIASES.has(cvar_name):
 			var _applied := set_cvar(cvar_name, String(cv.call(&"get_string")))
 		made.append(cv)
 	return made
@@ -66,7 +104,9 @@ func follow_cvars(source: Object) -> bool:
 		return false
 	if not source.has_method(&"replicated_cvar") or not source.has_signal(&"replicated_cvar_changed"):
 		return false
-	for spec in cvar_specs():
+	var specs := cvar_specs()
+	specs.append_array(legacy_cvar_specs())
+	for spec in specs:
 		var cvar_name: String = spec["name"]
 		var held := String(source.call(&"replicated_cvar", cvar_name, ""))
 		if held != "":
@@ -79,7 +119,7 @@ func follow_cvars(source: Object) -> bool:
 ## Applies one cvar by name. False for another name or a value that does not parse.
 func set_cvar(cvar_name: String, value: String) -> bool:
 	var text := value.strip_edges()
-	match cvar_name:
+	match canonical_name(cvar_name):
 		CVAR_ENABLED:
 			if not text.is_valid_int():
 				return false
@@ -100,7 +140,18 @@ func set_cvar(cvar_name: String, value: String) -> bool:
 
 
 func _on_cvar_changed(_old: Variant, new_value: Variant, cvar_name: String) -> void:
-	var _applied := set_cvar(cvar_name, str(new_value))
+	if not set_cvar(cvar_name, str(new_value)):
+		return
+	# An alias and its current name hold one value: setting either moves the other.
+	var partner := canonical_name(cvar_name)
+	if partner == cvar_name:
+		for old: String in LEGACY_ALIASES:
+			if LEGACY_ALIASES[old] == cvar_name:
+				partner = old
+	var other: Variant = _bound.get(partner)
+	if other is Object and is_instance_valid(other) and other.has_method(&"set_value") and other.has_method(&"get_string"):
+		if String(other.call(&"get_string")) != str(new_value):
+			other.call(&"set_value", str(new_value))
 
 
 func _on_replicated_cvar(cvar_name: String, value: String) -> void:

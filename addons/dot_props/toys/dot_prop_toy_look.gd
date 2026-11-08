@@ -1,4 +1,4 @@
-class_name DotPropToyLook
+class_name DotPropBodyLook
 extends RefCounted
 
 ## How a toy is drawn: meshes made in code from the definition's size and colours.

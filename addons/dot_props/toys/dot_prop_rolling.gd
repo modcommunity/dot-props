@@ -21,7 +21,7 @@ var _last: Dictionary = {}
 
 ## Hits for this tick. [param victims]: [code]{id, position, radius, height}[/code] (feet, metres). Returns
 ## [code]{victim, damage, toy, direction}[/code] for each person a fast toy touches. [param delta] advances the cooldown clock.
-func scan(box: DotPropToyBox, victims: Array, delta: float) -> Array[Dictionary]:
+func scan(box: DotPropBodyBox, victims: Array, delta: float) -> Array[Dictionary]:
 	_now += delta
 	var out: Array[Dictionary] = []
 	if box == null or victims.is_empty():
@@ -29,7 +29,7 @@ func scan(box: DotPropToyBox, victims: Array, delta: float) -> Array[Dictionary]
 	for node: Variant in box.toys:
 		if not is_instance_valid(node):
 			continue
-		var toy: DotPropToy = node
+		var toy: DotPropBody = node
 		if toy.body == null or not toy.body.is_inside_tree() or not kinds.has(toy.kind):
 			continue
 		var speed := toy.body.linear_velocity.length()

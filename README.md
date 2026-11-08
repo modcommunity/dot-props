@@ -192,7 +192,7 @@ if taunts.due(player_key, now):
 Things on a map players play with, placed by the map's data: a beach ball, a football, a bowling ball and pins, a barrel, a tyre, a punching bag, a swing, a see-saw, a roundabout, a wobbly platform, a trampoline, a bounce pad, a switch, a lamp post, a fountain, a horn and a bell. The server simulates them and clients draw what it sends.
 
 ```gdscript
-var toys := DotPropToyBox.new()
+var toys := DotPropBodyBox.new()
 toys.authoritative = is_server
 toys.draw = not is_dedicated_server
 toys.loose_layer = layout.layer_mask(&"toy")      # balls and barrels: people walk through and push them
@@ -220,7 +220,7 @@ toys.shot_along(origin, direction, reach, damage, level_mask)   # when your trac
 toys.blast(at, radius, speed)                     # an explosion
 ```
 
-Replicate each toy by its index with `state_transform()`, `on` and `count`, and call `show_state` with them on a client. Connect `sound` to your audio and add `DotPropToySounds.rows()` to your sound catalogue. `sv_toys 0` removes them, `sv_toys_awake` caps how many simulate at once (24, or 8 in a browser), and `sv_toys_push` sets how hard walking into one pushes it. Add or retune toys with `DotPropToyCatalogue.merge_json`. See [docs/toys.md](docs/toys.md).
+Replicate each toy by its index with `state_transform()`, `on` and `count`, and call `show_state` with them on a client. Connect `sound` to your audio and add `DotPropBodySounds.rows()` to your sound catalogue. `sv_physprops 0` removes them, `sv_physprops_awake` caps how many simulate at once (24, or 8 in a browser), and `sv_physprops_push` sets (the old `sv_toys*` names still work as aliases) how hard walking into one pushes it. Add or retune toys with `DotPropBodyCatalogue.merge_json`. See [docs/toys.md](docs/toys.md).
 
 The toy sounds are Kenney's (CC0) plus a horn made for this addon; `addons/dot_props/toys/sounds/CREDITS.md` lists every file. Eight toys (pin, barrel, crate, tyre, lamp post, fountain, horn, bell) have a small glb look in `addons/dot_props/toys/models/`, made for this addon and released CC0; the generator is `art-src/build_toy_models.py` (Blender, headless). Every toy still has a code-built fallback, so a pack that strips `models/` draws as before. The other toys are drawn with meshes made in code.
 

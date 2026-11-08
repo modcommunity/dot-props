@@ -161,12 +161,12 @@ func _test_prop_folder() -> void:
 func _test_clear_cache() -> void:
 	_section("clear_cache drops the shared materials")
 
-	var first := DotPropToyLook.material(Color.RED)
-	_check(DotPropToyLook.material(Color.RED) == first, "a colour is built once")
-	DotPropToyLook.clear_cache()
+	var first := DotPropBodyLook.material(Color.RED)
+	_check(DotPropBodyLook.material(Color.RED) == first, "a colour is built once")
+	DotPropBodyLook.clear_cache()
 	DotPropModel.clear_cache()
-	_check(DotPropToyLook.material(Color.RED) != first, "after clear_cache it is built again")
-	_check(DotPropToyLook.material(Color.RED) is StandardMaterial3D, "and still usable")
+	_check(DotPropBodyLook.material(Color.RED) != first, "after clear_cache it is built again")
+	_check(DotPropBodyLook.material(Color.RED) is StandardMaterial3D, "and still usable")
 
 	_done()
 

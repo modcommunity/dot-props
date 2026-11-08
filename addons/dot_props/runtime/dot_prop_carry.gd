@@ -62,8 +62,8 @@ const CHANNEL := "props"
 @export_range(0.0, 1000.0, 1.0) var max_carry_speed: float = 60.0
 
 ## A map's toys, for the roundabout: a person standing on a turning one is carried round with
-## it by [method ride] ([method DotPropToyBox.carry_for]). Null rides props only.
-var toys: DotPropToyBox = null
+## it by [method ride] ([method DotPropBodyBox.carry_for]). Null rides props only.
+var toys: DotPropBodyBox = null
 
 var _spawner: DotPropSpawner = null
 

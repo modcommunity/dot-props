@@ -48,19 +48,19 @@ func _run() -> void:
 	shape.position = Vector3(0, -0.5, 0)
 	ground.add_child(shape)
 	var lawn := MeshInstance3D.new()
-	lawn.mesh = DotPropToyLook.box(Vector3(80, 1, 80))
-	lawn.material_override = DotPropToyLook.material(Color(0.45, 0.7, 0.4), 0.95)
+	lawn.mesh = DotPropBodyLook.box(Vector3(80, 1, 80))
+	lawn.material_override = DotPropBodyLook.material(Color(0.45, 0.7, 0.4), 0.95)
 	lawn.position = Vector3(0, -0.5, 0)
 	ground.add_child(lawn)
 	add_child(ground)
 
-	var toys := DotPropToyBox.new()
+	var toys := DotPropBodyBox.new()
 	toys.loose_layer = 2
 	toys.loose_mask = 1 | 2 | 4
 	toys.solid_layer = 4
 	toys.solid_mask = 1 | 2
 	add_child(toys)
-	toys.catalogue = DotPropToyCatalogue.stock()
+	toys.catalogue = DotPropBodyCatalogue.stock()
 	var ids := toys.catalogue.ids()
 	var placements: Array = []
 	var columns := 6

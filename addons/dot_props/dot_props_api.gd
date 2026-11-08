@@ -11,10 +11,10 @@ extends RefCounted
 # 3: core/: DotPropPieces (collision shaped like the model).
 # 4: DotPropDisguise.lean_basis, standing_size, standing_hull, middle_height, model_transform,
 #    box_transform: a leant prop rests on the floor.
-# 5: toys/: DotPropToyCatalogue, DotPropToyBox, DotPropToy, DotPropToyRules, DotPropToySounds,
-#    DotPropToyLook (networked physics toys and interactables placed by a map's data).
-# 6: DotPropToy.carry, surface_velocity, show_state's delta; DotPropToyBox.carry_for;
-#    DotPropCarry.toys (a roundabout carries the people standing on it); DotPropToyBox.shot
+# 5: toys/: DotPropBodyCatalogue, DotPropBodyBox, DotPropBody, DotPropBodyRules, DotPropBodySounds,
+#    DotPropBodyLook (networked physics toys and interactables placed by a map's data).
+# 6: DotPropBody.carry, surface_velocity, show_state's delta; DotPropBodyBox.carry_for;
+#    DotPropCarry.toys (a roundabout carries the people standing on it); DotPropBodyBox.shot
 #    shot_along and blast (a hit scan's damage and an explosion turned into a push), a shot
 #    bell rings.
 # 7: core/: DotPropModel (a model file as a body's picture, hull and mass) and DotPropFolder

@@ -1,7 +1,7 @@
-class_name DotPropToyCatalogue
+class_name DotPropBodyCatalogue
 extends RefCounted
 
-## What a toy is: the definitions a [DotPropToyBox] builds from, by id. A map places a toy by
+## What a toy is: the definitions a [DotPropBodyBox] builds from, by id. A map places a toy by
 ## naming one (`{"toy": "beach_ball", "at": [x, y, z]}`); this file says what that is.
 ##
 ## [b]Data, every field a number or a word[/b], so a game adds or retunes toys from JSON
@@ -20,14 +20,14 @@ extends RefCounted
 ## - `kick`: the speed in m/s a use gives it (an impulse of `kick * mass`), or for a spinner
 ##   the rim speed.
 ## - `launch`: `[x, y, z]` m/s a bouncer or pad throws a person, in the toy's own frame.
-## - `sound_hit`, `sound_use`: ids in [DotPropToySounds], played where it happens.
+## - `sound_hit`, `sound_use`: ids in [DotPropBodySounds], played where it happens.
 ## - `on`: whether a switchable toy (lamp, fountain) starts on.
 
 ## What a toy does, by kind:
 ## - `ball`: a loose sphere (beach ball, football, bowling ball).
 ## - `pin`: a loose upright cylinder that topples (a bowling pin).
 ## - `barrel`: a loose upright cylinder that tips and rolls.
-## - `crate`: a loose box that slides when pushed and is thrown by a blast (a game spawns them while it runs, [method DotPropToyBox.add_toy]).
+## - `crate`: a loose box that slides when pushed and is thrown by a blast (a game spawns them while it runs, [method DotPropBodyBox.add_toy]).
 ## - `tyre`: a loose wheel stood on its tread; it rolls.
 ## - `bag`: a punching bag hung from a frame on a pin joint.
 ## - `swing`: a seat on a rigid pendulum hinged under a frame's bar.
@@ -52,7 +52,7 @@ const MOVING: Array[StringName] = [
 ]
 
 ## Kinds nothing collides with but other toys and the world: a person walks into one and it is
-## pushed ([method DotPropToy.push_from]); never a wall a body or a bot can be stuck on.
+## pushed ([method DotPropBody.push_from]); never a wall a body or a bot can be stuck on.
 const LOOSE: Array[StringName] = [&"ball", &"pin", &"barrel", &"crate", &"tyre", &"bag", &"swing"]
 
 ## Kinds whose `on` the use key or a switch flips.
@@ -82,8 +82,8 @@ var defs: Dictionary = {}
 
 ## The stock set: eighteen toys, every kind at least once, tuned on a person's scale (1.8 m,
 ## 6 m/s, gravity 20 m/s², the family's movement).
-static func stock() -> DotPropToyCatalogue:
-	var c := DotPropToyCatalogue.new()
+static func stock() -> DotPropBodyCatalogue:
+	var c := DotPropBodyCatalogue.new()
 	var all := _stock_loose()
 	all.merge(_stock_driven())
 	all.merge(_stock_fixed())

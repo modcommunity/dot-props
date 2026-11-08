@@ -2,7 +2,7 @@
 
 Own work, CC0. Materials named c0/c1 take the toy definition's colours at run time;
 every other material (steel, rope, dark) keeps its own colour. Z-up here, Y-up in the glb;
-each model is centred on its bounding box and scaled to the toy's size by DotPropToyLook.
+each model is centred on its bounding box and scaled to the toy's size by DotPropBodyLook.
 """
 import bpy, bmesh, math, sys
 from mathutils import Vector

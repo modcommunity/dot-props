@@ -507,22 +507,22 @@ func _test_pieces() -> void:
 
 func _test_toy_catalogue() -> void:
 	_section("the toy catalogue: a dozen and more, every kind, retuned from data")
-	var c := DotPropToyCatalogue.stock()
+	var c := DotPropBodyCatalogue.stock()
 	_check(c.size() >= 12, "the stock has at least a dozen toys", str(c.size()))
 	var kinds := {}
 	for id in c.ids():
 		kinds[c.get_def(StringName(id))["kind"]] = true
-	_check(kinds.size() == DotPropToyCatalogue.KINDS.size(), "and uses every kind", str(kinds.keys()))
-	var sounds := DotPropToySounds.ids()
+	_check(kinds.size() == DotPropBodyCatalogue.KINDS.size(), "and uses every kind", str(kinds.keys()))
+	var sounds := DotPropBodySounds.ids()
 	var unheard := PackedStringArray()
 	for id in c.ids():
 		var def := c.get_def(StringName(id))
 		for key in ["sound_hit", "sound_use"]:
 			if def[key] != &"" and not sounds.has(def[key]):
 				unheard.append("%s.%s" % [id, key])
-	_check(unheard.is_empty(), "every sound a toy names is a row in DotPropToySounds", ", ".join(unheard))
+	_check(unheard.is_empty(), "every sound a toy names is a row in DotPropBodySounds", ", ".join(unheard))
 	var absent := PackedStringArray()
-	for row in DotPropToySounds.rows():
+	for row in DotPropBodySounds.rows():
 		for path: String in row["variants"]:
 			if not ResourceLoader.exists(path):
 				absent.append(path)
@@ -533,8 +533,8 @@ func _test_toy_catalogue() -> void:
 		"a game retunes one field of a stock toy and adds its own from data")
 	var bad := c.merge({"rocket": {"kind": "rocket"}})
 	_check(not bad.ok and not c.has(&"rocket"), "a kind that does not exist is refused, by name", bad.error.message if not bad.ok else "")
-	_check(DotPropToyBox.normal_placement({"toy": "swing", "at": [1, 0, 2], "yaw": 90, "links": [3]}).get("links") == [3]
-		and DotPropToyBox.normal_placement({"at": [0, 0, 0]}).is_empty(), "a placement is {toy, at}, and one without a toy is refused")
+	_check(DotPropBodyBox.normal_placement({"toy": "swing", "at": [1, 0, 2], "yaw": 90, "links": [3]}).get("links") == [3]
+		and DotPropBodyBox.normal_placement({"at": [0, 0, 0]}).is_empty(), "a placement is {toy, at}, and one without a toy is refused")
 	_done()
 
 

@@ -9,12 +9,12 @@ func _test_toys_prefilter() -> void:
 	var made_b := _scatter_box(300)
 	# Far apart, or the two boxes' toys collide with each other.
 	(made_b[0] as Node3D).position.x = 1000.0
-	var a: DotPropToyBox = made_a[1]
-	var b: DotPropToyBox = made_b[1]
+	var a: DotPropBodyBox = made_a[1]
+	var b: DotPropBodyBox = made_b[1]
 	await _step_physics(30)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 11
-	var movers: Array[DotPropToy] = []
+	var movers: Array[DotPropBody] = []
 	for t in a.toys:
 		if t.pushable and t.body != null:
 			movers.append(t)
@@ -70,7 +70,7 @@ func _test_toys_prefilter() -> void:
 func _test_toys_grid_moving() -> void:
 	_section("toy box grid: moving toys and toys crossing cells give the brute-force result")
 	var made := _scatter_box(200)
-	var box: DotPropToyBox = made[1]
+	var box: DotPropBodyBox = made[1]
 	await _step_physics(20)
 	var rng := DotRandomStream.new(23, &"toy_grid")
 	var bad := ""
@@ -87,11 +87,11 @@ func _test_toys_grid_moving() -> void:
 					crossed += 1
 		await _step_physics(3)
 		for _p in range(40):
-			var bodies: Array[DotPropToy] = []
+			var bodies: Array[DotPropBody] = []
 			for t in box.toys:
 				if t.body != null:
 					bodies.append(t)
-			var at := (rng.next_pick(bodies) as DotPropToy).body.global_position
+			var at := (rng.next_pick(bodies) as DotPropBody).body.global_position
 			var feet := Vector3(at.x + rng.next_range_f(-1, 1), 0.0, at.z + rng.next_range_f(-1, 1))
 			var vel := Vector3(rng.next_range_f(-6, 6), 0, rng.next_range_f(-6, 6))
 			for t in box.toys:
@@ -122,7 +122,7 @@ func _test_toys() -> void:
 	_section("toys on the server: pushed, kicked, stood on, switched, bounced on, capped, sent home")
 	var made := _toy_world(true)
 	var floor_body: Node3D = made[0]
-	var toys: DotPropToyBox = made[1]
+	var toys: DotPropBodyBox = made[1]
 	_check((made[2] as DotResult).ok and toys.count() == toys.catalogue.size(), "every stock toy is built", str(toys.count()))
 	await _step_physics(90)
 	var fell := PackedStringArray()
@@ -162,18 +162,18 @@ func _test_toys() -> void:
 
 	# A drop over a pit (past the floor's edge) is lost after fall_limit metres, not at kill_y.
 	var lost_seen := [0]
-	var _lc := toys.lost.connect(func(_t: DotPropToy) -> void: lost_seen[0] += 1)
+	var _lc := toys.lost.connect(func(_t: DotPropBody) -> void: lost_seen[0] += 1)
 	toys.fall_limit = 4.0
-	toys.lost_mode = DotPropToyBox.LostMode.REMOVE
+	toys.lost_mode = DotPropBodyBox.LostMode.REMOVE
 	var pit := toys.add_toy(&"crate", Vector3(150, 1.0, 0.0))
 	var pit_id := pit.get_instance_id()
 	var n_pit := toys.count()
 	for _i in range(240):
 		toys.advance(1.0 / 60.0)
 		await get_tree().physics_frame
-	_check(lost_seen[0] == 1 and toys.count() == n_pit - 1 and not toys.toys.any(func(t: DotPropToy) -> bool: return t.get_instance_id() == pit_id),
+	_check(lost_seen[0] == 1 and toys.count() == n_pit - 1 and not toys.toys.any(func(t: DotPropBody) -> bool: return t.get_instance_id() == pit_id),
 		"a crate dropped over a pit is lost after fall_limit and removed (LostMode.REMOVE)", "%d lost, %d toys of %d" % [lost_seen[0], toys.count(), n_pit])
-	toys.lost_mode = DotPropToyBox.LostMode.HOME
+	toys.lost_mode = DotPropBodyBox.LostMode.HOME
 	toys.fall_limit = 0.0
 	await _toys_ride(toys, floor_body)
 	await _toys_play(toys)
@@ -181,7 +181,7 @@ func _test_toys() -> void:
 	await _toys_reset(toys, floor_body)
 
 
-func _toys_ride(toys: DotPropToyBox, floor_body: Node3D) -> void:
+func _toys_ride(toys: DotPropBodyBox, floor_body: Node3D) -> void:
 	# The football kicked along -z.
 	var football := toys.toy(_index(toys, "football"))
 	var f0 := football.body.global_position
@@ -231,7 +231,7 @@ func _toys_ride(toys: DotPropToyBox, floor_body: Node3D) -> void:
 	prop_carry.free()
 
 
-func _toys_play(toys: DotPropToyBox) -> void:
+func _toys_play(toys: DotPropBodyBox) -> void:
 	# The swing, pushed at an angle to its bar, swings along its own plane and stays on the bar.
 	var swing := toys.toy(_index(toys, "swing"))
 	var _pushed := toys.use(swing.index, swing.body.global_position + Vector3(0.5, 1.2, 1.0), Vector3(-0.4, -0.2, -1))
@@ -271,7 +271,7 @@ func _toys_play(toys: DotPropToyBox) -> void:
 		"the bounce pad throws forward along its arrow and up")
 
 
-func _toys_shot(toys: DotPropToyBox, floor_body: Node3D) -> void:
+func _toys_shot(toys: DotPropBodyBox, floor_body: Node3D) -> void:
 	# Shot: a pistol's damage knocks a pin over and away; the floor is not a toy; a bell rings.
 	var pin := toys.toy(_index(toys, "bowling_pin"))
 	var p0 := pin.body.global_position
@@ -325,10 +325,10 @@ func _toys_shot(toys: DotPropToyBox, floor_body: Node3D) -> void:
 	parse_mesh.geometry_parsed_geometry_type = NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
 	NavigationServer3D.parse_source_geometry_data(parse_mesh, source, nav[0] as Node)
 	_check(met.is_empty() and source.get_vertices().size() >= shapes * 8 * 3,
-		"a footprint stops no ray, and a baker still parses it", "met %s, %d floats" % [str(DotPropToyBox.toy_of(met.get("collider")).def["id"] if DotPropToyBox.toy_of(met.get("collider")) != null else met.get("collider")), source.get_vertices().size()])
+		"a footprint stops no ray, and a baker still parses it", "met %s, %d floats" % [str(DotPropBodyBox.toy_of(met.get("collider")).def["id"] if DotPropBodyBox.toy_of(met.get("collider")) != null else met.get("collider")), source.get_vertices().size()])
 
 
-func _toys_reset(toys: DotPropToyBox, floor_body: Node3D) -> void:
+func _toys_reset(toys: DotPropBodyBox, floor_body: Node3D) -> void:
 	var ball := toys.toy(_index(toys, "beach_ball"))
 	var football := toys.toy(_index(toys, "football"))
 	var lamp := toys.toy(_index(toys, "lamp_post"))
@@ -341,10 +341,24 @@ func _toys_reset(toys: DotPropToyBox, floor_body: Node3D) -> void:
 	_check(football.body.global_position.distance_to(football.rest.origin) < 0.05 and lamp.on == bool(lamp.def["on"]),
 		"a reset puts every toy home and every lamp as the map has it")
 
-	var _off := toys.rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "0")
+	var _off := toys.rules.set_cvar(DotPropBodyRules.CVAR_ENABLED, "0")
 	_check(not ball.visible and ball.process_mode == Node.PROCESS_MODE_DISABLED and toys.aimed(Vector3(0, 1, 3), Vector3.FORWARD) == -1,
 		"sv_toys 0 takes them out of the world")
-	var _on := toys.rules.set_cvar(DotPropToyRules.CVAR_ENABLED, "1")
+	var _on := toys.rules.set_cvar(DotPropBodyRules.CVAR_ENABLED, "1")
+
+	# The old names still work: sv_toys* set the same rules, and the old classes are aliases.
+	var _legacy_off := toys.rules.set_cvar("sv_toys", "0")
+	_check(not toys.rules.enabled and not ball.visible, "the deprecated sv_toys alias still switches physics props off")
+	var _legacy_on := toys.rules.set_cvar(DotPropBodyRules.LEGACY_CVAR_ENABLED, "1")
+	_check(toys.rules.enabled and DotPropBodyRules.canonical_name("sv_toys_push") == "sv_physprops_push",
+		"and back on; each old cvar name maps to its new one")
+	var old_rules := DotPropToyRules.new()
+	var old_box := DotPropToyBox.new()
+	_check(old_rules is DotPropBodyRules and old_box is DotPropBodyBox and DotPropToyCatalogue.new() is DotPropBodyCatalogue,
+		"the DotPropToy* class names are aliases of the DotPropBody* classes")
+	old_box.free()
+	var specs := old_rules.cvar_specs().size() + old_rules.legacy_cvar_specs().size()
+	_check(specs == 6, "bind_cvars registers the three new cvars and their three aliases", str(specs))
 
 	toys.queue_free()
 	floor_body.queue_free()
@@ -356,7 +370,7 @@ func _toys_reset(toys: DotPropToyBox, floor_body: Node3D) -> void:
 func _test_toys_freed() -> void:
 	_section("a toy freed behind the box's back does not break the box")
 	var made := _toy_world(true)
-	var toys: DotPropToyBox = made[1]
+	var toys: DotPropBodyBox = made[1]
 	var total := toys.count()
 	var live_index := 2
 	for i in [0, 1, total - 1]:
@@ -393,7 +407,7 @@ func _test_toy_mirror() -> void:
 	_section("toys on a client: frozen, posed from the server's state, heard when they change")
 	var made := _toy_world(false)
 	var floor_body: Node3D = made[0]
-	var toys: DotPropToyBox = made[1]
+	var toys: DotPropBodyBox = made[1]
 	var up := Vector3(0, 100, 0)
 	var ball := toys.toy(_index(toys, "beach_ball"))
 	_check(ball.body.freeze and ball.body.freeze_mode == RigidBody3D.FREEZE_MODE_KINEMATIC and not ball.use(Vector3.ZERO, Vector3.FORWARD),
@@ -406,14 +420,14 @@ func _test_toy_mirror() -> void:
 	var horn := toys.toy(_index(toys, "horn"))
 	horn.show_state(Vector3.ZERO, Quaternion.IDENTITY, false, 1)
 	toys._process(1.0 / 60.0)
-	_check(heard.has(DotPropToySounds.HORN), "a use count that moved is heard", str(heard))
+	_check(heard.has(DotPropBodySounds.HORN), "a use count that moved is heard", str(heard))
 	# A ball dropped onto the floor (in the server's states) is heard landing.
 	heard.clear()
 	for i in range(20):
 		var y := maxf(2.0 - 0.12 * float(i), 0.5)
 		ball.show_state(up + Vector3(3, y, 1), Quaternion.IDENTITY, false, 0)
 		toys._process(1.0 / 60.0)
-	_check(heard.has(DotPropToySounds.BOUNCE), "and a ball stopping short on the floor is heard", str(heard))
+	_check(heard.has(DotPropBodySounds.BOUNCE), "and a ball stopping short on the floor is heard", str(heard))
 	var aimed := toys.aimed(up + Vector3(3, 2, 4), Vector3(0, 0, -1), 4.0)
 	_check(aimed == ball.index, "the use prompt finds a client's toy along the look")
 	# A client's roundabout turns as the server's states say, and its own player standing on it
@@ -440,9 +454,9 @@ func _test_rolling() -> void:
 	_section("rolling: a fast barrel hurts a person it touches, a slow one and a ball do not")
 	var made := _toy_world(true)
 	var floor_body: Node3D = made[0]
-	var toys: DotPropToyBox = made[1]
-	var barrel: DotPropToy = toys.toys[_index(toys, "barrel")]
-	var ball: DotPropToy = toys.toys[_index(toys, "beach_ball")]
+	var toys: DotPropBodyBox = made[1]
+	var barrel: DotPropBody = toys.toys[_index(toys, "barrel")]
+	var ball: DotPropBody = toys.toys[_index(toys, "beach_ball")]
 	await _step_physics(60)
 	var rule := DotPropRolling.new()
 	var at := barrel.body.global_position
@@ -481,7 +495,7 @@ func _test_tyre_rest() -> void:
 	shape.position = Vector3(0, -0.5, 0)
 	floor_body.add_child(shape)
 	holder.add_child(floor_body)
-	var toys := DotPropToyBox.new()
+	var toys := DotPropBodyBox.new()
 	toys.authoritative = true
 	toys.loose_layer = 2
 	toys.loose_mask = 1 | 2 | 4
@@ -489,7 +503,7 @@ func _test_tyre_rest() -> void:
 	toys.solid_mask = 1 | 2
 	toys.footprint_layer = 8
 	holder.add_child(toys)
-	toys.catalogue = DotPropToyCatalogue.stock()
+	toys.catalogue = DotPropBodyCatalogue.stock()
 	var built := toys.build([{"toy": "tyre", "at": [3.0, 0.275, 2.0]}, {"toy": "tyre", "at": [6.0, 0.0, 2.0], "yaw": 30}])
 	_check(built.ok and toys.count() == 2, "two tyres built", str(built.ok))
 	await _step_physics(2)

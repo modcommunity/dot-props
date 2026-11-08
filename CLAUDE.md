@@ -28,7 +28,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | `addons/dot_props/runtime/` | `DotPropSpawner` (the node a game adds), `DotPropDamage`, `DotPropCarry`, `DotPropIO`; road hazards `DotPropBridge` (a deck that sags and falls, with a mirror mode), `DotPropRubble`, `DotPropLedge` (a rock outcrop pinching a road to a ledge) |
 | `addons/dot_props/hunt/` | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | `addons/dot_props/tools/` | `DotPropTool` (reach, targeting, `may_act_on`), `DotPhysGun`, `DotGravGun`, `DotToolView` (the first-person model of a held tool or toy, API 8) |
-| `addons/dot_props/toys/` | `DotPropToyCatalogue` (18 stock toys over 16 kinds, retuned from JSON), `DotPropToyBox` (a map's toys, the awake cap, push/stand/use/hit/launch), `DotPropToy` (one, its bodies and look; the per-kind builders are its base script `dot_prop_toy_parts.gd`, no `class_name`), `DotPropToyRules` (`sv_toys*`), `DotPropToySounds` (+ `sounds/`, CC0), `DotPropToyLook` (code meshes, plus optional glb looks from `toys/models/`, built by `art-src/build_toy_models.py`) |
+| `addons/dot_props/toys/` | `DotPropBodyCatalogue` (18 stock toys over 16 kinds, retuned from JSON), `DotPropBodyBox` (a map's toys, the awake cap, push/stand/use/hit/launch), `DotPropBody` (one, its bodies and look; the per-kind builders are its base script `dot_prop_toy_parts.gd`, no `class_name`), `DotPropBodyRules` (`sv_physprops*` (`sv_toys*` kept as aliases)), `DotPropBodySounds` (+ `sounds/`, CC0), `DotPropBodyLook` (code meshes, plus optional glb looks from `toys/models/`, built by `art-src/build_toy_models.py`) |
 | `fixtures/` | 3D and 2D prop bodies for the suite |
 | `examples/props_selftest.tscn` | the suite; spawns real `RigidBody3D`s into a real tree and checks every node is freed |
 | `examples/toy_gallery.tscn` | every stock toy rendered on a lawn (xvfb; `--kick` shows them moving) |
@@ -96,8 +96,8 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | A player disguised as a prop | `DotPropDisguiseRules`, `DotPropDisguise`, `DotPropTaunts` |
 | A prop in a 2D world | `DotPropSpawner.spawn_2d`. See game-hungario |
 | A map prop's collision shaped like its model | `DotPropPieces.measure` in the game's measuring tool, `decode` + `shapes` at run time. See game-hide-n-seek |
-| Toys on a map | `DotPropToyBox` with the game's collision bits, `build(placements)`; per tick `push_from`/`stand_on`/`advance`, the use key's `aimed` + `use`, shots' `hit`, `launch_for` in movement; replicate `state_transform`/`on`/`count`. See game-hide-n-seek |
-| A new toy, or a stock one retuned | `DotPropToyCatalogue.merge` / `merge_json` |
-| How many toys simulate, whether there are any | `DotPropToyRules` (`sv_toys`, `sv_toys_awake`, `sv_toys_push`), `bind_cvars` on the server, `follow_cvars` on a client |
+| Toys on a map | `DotPropBodyBox` with the game's collision bits, `build(placements)`; per tick `push_from`/`stand_on`/`advance`, the use key's `aimed` + `use`, shots' `hit`, `launch_for` in movement; replicate `state_transform`/`on`/`count`. See game-hide-n-seek |
+| A new toy, or a stock one retuned | `DotPropBodyCatalogue.merge` / `merge_json` |
+| How many toys simulate, whether there are any | `DotPropBodyRules` (`sv_physprops`, `sv_physprops_awake`, `sv_physprops_push`; the old `sv_toys*` names are aliases), `bind_cvars` on the server, `follow_cvars` on a client |
 
 Deliberately not here: replication (a toy's state is three fields a game's own behaviour sends), a spawn menu, constraints (welding, ropes, thrusters, wheels), saving a build, a damage model for people, content delivery. [spawning](docs/spawning.md#deliberately-not-here)

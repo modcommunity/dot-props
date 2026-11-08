@@ -1,4 +1,4 @@
-class_name DotPropToyBox
+class_name DotPropBodyBox
 extends Node3D
 
 ## A map's toys: built from its placements, simulated on the server under a cap on how many are
@@ -17,9 +17,9 @@ extends Node3D
 ## - in its movement code on every end: [method launch_for], for the bouncers and pads, and
 ##   [method carry_for] after the move, for a roundabout's riders (or [DotPropCarry] with
 ##   [member DotPropCarry.toys] set, which does it for a game already riding props);
-## - on a client: [member authoritative] false, and [method DotPropToy.show_state] from its own
-##   replicated entity per toy (the state is [method DotPropToy.state_transform], `on`, `count`);
-## - [signal sound] into its audio, with [DotPropToySounds]' rows in its catalogue.
+## - on a client: [member authoritative] false, and [method DotPropBody.show_state] from its own
+##   replicated entity per toy (the state is [method DotPropBody.state_transform], `on`, `count`);
+## - [signal sound] into its audio, with [DotPropBodySounds]' rows in its catalogue.
 
 ## A toy made a sound: play [param id] at [param at], [param strength] 0..1.
 signal sound(id: StringName, at: Vector3, strength: float)
@@ -27,8 +27,8 @@ signal sound(id: StringName, at: Vector3, strength: float)
 ## A toy was used. Server side.
 signal used(index: int)
 
-var catalogue: DotPropToyCatalogue = null
-var rules: DotPropToyRules = DotPropToyRules.new()
+var catalogue: DotPropBodyCatalogue = null
+var rules: DotPropBodyRules = DotPropBodyRules.new()
 
 ## Whether this end simulates the toys (a server, an offline game) or draws replicated states.
 var authoritative: bool = true
@@ -66,13 +66,13 @@ var lost_mode: LostMode = LostMode.HOME
 var fall_limit: float = 0.0
 
 ## A toy was lost, before [member lost_mode] is applied; a removal frees it after the handlers.
-signal lost(toy: DotPropToy)
+signal lost(toy: DotPropBody)
 
 ## Further than this from home, a toy goes home at the next round (and at once when it is
 ## asleep there, so a ball kicked into a corner of the map stays put for the round).
 var lost_distance: float = 80.0
 
-var toys: Array[DotPropToy] = []
+var toys: Array[DotPropBody] = []
 
 ## Seconds at rest after which an awake loose toy is put to sleep (0: the engine's own timer).
 var sleep_after: float = 0.0
@@ -119,7 +119,7 @@ static func normal_placement(raw: Variant) -> Dictionary:
 func build(placements: Array) -> DotResult:
 	clear()
 	if catalogue == null:
-		catalogue = DotPropToyCatalogue.stock()
+		catalogue = DotPropBodyCatalogue.stock()
 	if not _rules_connected and rules != null:
 		var _c := rules.changed.connect(_on_rules_changed)
 		_rules_connected = true
@@ -135,7 +135,7 @@ func build(placements: Array) -> DotResult:
 			if not missing.has(placement["toy"]):
 				missing.append(placement["toy"])
 			continue
-		var toy := DotPropToy.new()
+		var toy := DotPropBody.new()
 		toy.name = "Toy%d" % toys.size()
 		toy.index = toys.size()
 		toy.authoritative = authoritative
@@ -166,14 +166,14 @@ const CHANNEL := "dot_props.toys"
 ## Adds one toy of catalogue [param id] at [param at] while the map runs. Its index is past
 ## the built ones, so index-paired clients keep such toys apart. Null when the id is unknown
 ## or the box is not in the tree.
-func add_toy(id: StringName, at: Vector3, yaw: float = 0.0, p_def: Dictionary = {}) -> DotPropToy:
+func add_toy(id: StringName, at: Vector3, yaw: float = 0.0, p_def: Dictionary = {}) -> DotPropBody:
 	if catalogue == null:
-		catalogue = DotPropToyCatalogue.stock()
+		catalogue = DotPropBodyCatalogue.stock()
 	var def := p_def if not p_def.is_empty() else catalogue.get_def(id)
 	if def.is_empty() or not is_inside_tree():
 		return null
 	var placement := {"toy": str(id), "at": [at.x, at.y, at.z], "yaw": yaw}
-	var toy := DotPropToy.new()
+	var toy := DotPropBody.new()
 	toy.name = "Toy%d" % toys.size()
 	toy.index = toys.size()
 	toy.authoritative = authoritative
@@ -191,7 +191,7 @@ func add_toy(id: StringName, at: Vector3, yaw: float = 0.0, p_def: Dictionary = 
 
 
 ## Takes [param toy] out of the box and frees it. The indexes of the toys after it move down.
-func remove_toy(toy: DotPropToy) -> void:
+func remove_toy(toy: DotPropBody) -> void:
 	var at := toys.find(toy)
 	if at < 0:
 		return
@@ -227,7 +227,7 @@ func count() -> int:
 	return toys.size()
 
 
-func toy(index: int) -> DotPropToy:
+func toy(index: int) -> DotPropBody:
 	if index < 0 or index >= toys.size() or not is_instance_valid(toys[index]):
 		return null
 	return toys[index]
@@ -262,7 +262,7 @@ func _build_footprints() -> void:
 ## The bodies a bot's walkable mesh should be baked round: one static body of boxes, one per
 ## toy that stands in the way (a swing's sweep, a see-saw, a roundabout, a trampoline). Never
 ## the loose toys, which a person walks through and pushes. Out of the physics space, so no
-## ray or body ever meets them; none while `sv_toys` is 0.
+## ray or body ever meets them; none while `sv_physprops` is 0.
 func nav_bodies() -> Array:
 	return [_footprints] if _footprints != null and (rules == null or rules.enabled) else []
 
@@ -270,13 +270,13 @@ func nav_bodies() -> Array:
 # --- The server's tick ------------------------------------------------------------
 
 ## Whether [param toy] has lain still anywhere since it was added (a drop over a pit has not).
-func has_rested(toy: DotPropToy) -> bool:
+func has_rested(toy: DotPropBody) -> bool:
 	return _rested.has(toy)
 
 
 ## Whether [param t] is lost this tick, and the lost mode applied to it if so. A toy that has
 ## been nearly still for 0.3 s counts as resting where it is.
-func _lost(t: DotPropToy, delta: float) -> bool:
+func _lost(t: DotPropBody, delta: float) -> bool:
 	var at := t.body.global_position
 	var rested: Variant = _rested.get(t)
 	var below := at.y < kill_y or not at.is_finite()
@@ -311,7 +311,7 @@ func _lost(t: DotPropToy, delta: float) -> bool:
 
 ## Whether [param t] sleeps where it was recorded at rest, so _lost and the awake cap would do
 ## nothing for it this tick.
-func _settled(t: DotPropToy) -> bool:
+func _settled(t: DotPropBody) -> bool:
 	if t._driven or float(_calm.get(t, 0.0)) < 0.3:
 		return false
 	var at := t.body.global_position
@@ -324,11 +324,11 @@ func advance(delta: float) -> void:
 	_grid_frame = -1
 	if not authoritative or not rules.enabled:
 		return
-	var awake: Array[DotPropToy] = []
+	var awake: Array[DotPropBody] = []
 	for node: Variant in toys.duplicate():
 		if not is_instance_valid(node):
 			continue
-		var t: DotPropToy = node
+		var t: DotPropBody = node
 		if t.body == null:
 			continue
 		if t.body.sleeping and _settled(t):
@@ -351,7 +351,7 @@ func advance(delta: float) -> void:
 		return
 	# The longest untouched sleep first, and among those the slowest, so a ball in flight is
 	# the last to be stopped.
-	awake.sort_custom(func(a: DotPropToy, b: DotPropToy) -> bool:
+	awake.sort_custom(func(a: DotPropBody, b: DotPropBody) -> bool:
 		if a.touched_at != b.touched_at:
 			return a.touched_at < b.touched_at
 		return a.body.linear_velocity.length_squared() < b.body.linear_velocity.length_squared())
@@ -381,7 +381,7 @@ func push_from(feet: Vector3, velocity: Vector3, radius: float, height: float) -
 	var n := 0
 	var push_scale := rules.push_scale
 	for i in _candidates(feet):
-		var t: DotPropToy = toys[i]
+		var t: DotPropBody = toys[i]
 		if not is_instance_valid(t) or not t.pushable or t.body == null:
 			continue
 		var reach := 4.0 + t._radius
@@ -469,7 +469,7 @@ func stand_on(feet: Vector3, mass: float) -> int:
 		return 0
 	var n := 0
 	for i in _candidates(feet):
-		var t: DotPropToy = toys[i]
+		var t: DotPropBody = toys[i]
 		if is_instance_valid(t) and t.body != null and _near(t, feet, 3.0) and t.stand_on(feet, mass, gravity):
 			t.touched_at = _now
 			n += 1
@@ -488,7 +488,7 @@ func stand_on_unfiltered(feet: Vector3, mass: float) -> int:
 	return n
 
 
-static func _near(t: DotPropToy, at: Vector3, reach: float) -> bool:
+static func _near(t: DotPropBody, at: Vector3, reach: float) -> bool:
 	return t.global_position.distance_squared_to(at) < (reach + t._radius) * (reach + t._radius) \
 		or t.body.global_position.distance_squared_to(at) < (reach + t._radius) * (reach + t._radius)
 
@@ -534,7 +534,7 @@ func carry_for(feet: Vector3, delta: float, ground_id: int = 0) -> Dictionary:
 	return {}
 
 
-static func _carried(t: DotPropToy, feet: Vector3, delta: float) -> Dictionary:
+static func _carried(t: DotPropBody, feet: Vector3, delta: float) -> Dictionary:
 	var out := t.carry(feet, delta)
 	if not out.is_empty():
 		out["index"] = t.index
@@ -565,10 +565,10 @@ func aimed(origin: Vector3, direction: Vector3, reach: float = 2.2) -> int:
 
 
 ## The toy a collider belongs to, or null.
-static func toy_of(collider: Variant) -> DotPropToy:
+static func toy_of(collider: Variant) -> DotPropBody:
 	if collider is Object and is_instance_valid(collider) and (collider as Object).has_meta(&"dot_prop_toy"):
 		var t: Variant = (collider as Object).get_meta(&"dot_prop_toy")
-		return t as DotPropToy if t is DotPropToy else null
+		return t as DotPropBody if t is DotPropBody else null
 	return null
 
 
@@ -635,7 +635,7 @@ func shot_along(origin: Vector3, direction: Vector3, reach: float, damage: float
 
 ## The mass a push is reckoned for: the toy's, up to the cap, and something for a fixed toy
 ## (a bell weighs nothing in the catalogue, and a push of nothing is refused).
-static func _shot_mass(t: DotPropToy) -> float:
+static func _shot_mass(t: DotPropBody) -> float:
 	return clampf(float(t.def.get("mass", 1.0)), 0.25, SHOT_MASS_CAP)
 
 
@@ -700,7 +700,7 @@ func _on_toy_sound(id: StringName, at: Vector3, strength: float) -> void:
 	sound.emit(id, at, strength)
 
 
-## `sv_toys 0` takes every toy out of the world (no body, nothing drawn) on every end that
+## `sv_physprops 0` takes every toy out of the world (no body, nothing drawn) on every end that
 ## follows the rules, and 1 puts them back where they were.
 func _on_rules_changed() -> void:
 	var on := rules == null or rules.enabled
