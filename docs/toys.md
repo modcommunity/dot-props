@@ -1,4 +1,6 @@
-# Toys
+# Physics props (toys)
+
+**Naming (owner 2026-11-08):** the early "toys" idea has matured into physics props: loose and fixed rigid-body things on a map. The identifiers (`DotPropToy*`, the `toys` JSON key, the `TOYS` wire event, `sv_toys*` cvars, saved settings) keep the old name on purpose, so nothing on the wire, in saved config or in map data breaks; the user-visible wording says physics props. A rename of the identifiers would ship as new names with the old ones kept as aliases. **Placement policy:** a game places physics props on a map only where they belong: the playground, prop hunt, murder mystery and hide n seek. Deathmatch, deathrun and zombie maps place none (their built-ins do not; the cvar `sv_toys 0` removes any that map data still carries).
 
 `toys/` is a catalogue of things on a map that players play with: balls to kick, swings to push, see-saws to stand on, trampolines that throw you, switches that turn lamps and fountains on, a horn and a bell. A map places them by data and every game gets the same set. It is not the spawner: a toy is part of the map, placed by its author, not something a player makes.
 

@@ -33,9 +33,9 @@ func cap() -> int:
 
 func cvar_specs() -> Array[Dictionary]:
 	return [
-		{"name": CVAR_ENABLED, "value": "1" if enabled else "0", "description": "The map's toys (balls, swings, see-saws, switches...): 1 there, 0 gone."},
-		{"name": CVAR_AWAKE, "value": str(max_awake), "description": "The most toys simulating at once; 0 is the machine's default (24, or 8 without threads).", "min": 0.0, "max": 256.0},
-		{"name": CVAR_PUSH, "value": str(push_scale), "description": "How hard walking into a ball or a barrel sends it, against the walk's speed.", "min": 0.0, "max": 4.0},
+		{"name": CVAR_ENABLED, "value": "1" if enabled else "0", "description": "The map's physics props (toys: balls, barrels, swings, see-saws, switches...): 1 there, 0 gone."},
+		{"name": CVAR_AWAKE, "value": str(max_awake), "description": "The most physics props simulating at once; 0 is the machine's default (24, or 8 without threads).", "min": 0.0, "max": 256.0},
+		{"name": CVAR_PUSH, "value": str(push_scale), "description": "How hard walking into a physics prop (a ball, a barrel) sends it, against the walk's speed.", "min": 0.0, "max": 4.0},
 	]
 
 
