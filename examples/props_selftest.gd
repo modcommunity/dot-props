@@ -13,7 +13,7 @@ extends "props_selftest_toys.gd"
 ## instantiates real [RigidBody3D]s, because a limit that counted a dictionary would
 ## pass while leaking nodes.
 
-const CHECKS := 386
+const CHECKS := 390
 
 ## Sections entered against sections that ran to their last line, and against this. A
 ## runtime error inside a section aborts that function and nothing says so; a section that
