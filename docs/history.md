@@ -2,7 +2,7 @@
 
 Bugs worth recognising if they come back. None errored. The rule each left is in the topic docs.
 
-- **`DotPropDef.mass` was not put on the spawned body.** It was read in one place, against `grab_mass_limit`, and the body kept its scene's mass: a catalogue saying 900 kg over a scene saved at 20 kg gave a prop the physics gun refused as too heavy and the gravity gun threw like a beach ball. Invisible in this suite, where every fixture is one scene and the check was the limit, not the physics; found by game-playground, which ships one scene for a dozen props.
+- **`DotPropDef.mass` was not put on the spawned body.** It was read in one place, against `grab_mass_limit`, and the body kept its scene's mass: a catalogue saying 900 kg over a scene saved at 20 kg gave a prop the physics gun refused as too heavy and the gravity gun threw like a beach ball. Invisible in this suite, where every fixture is one scene and the check was the limit, not the physics; found by game-playlot, which ships one scene for a dozen props.
 - **Ownership and undo shared one list**, which was a budget bypass and left props in the world for ever past the undo depth.
 - **A prop removed while held was not let go of** until the deferred free landed.
 - **`per_player_frozen` and `size` were declared and read by nothing**: documented limits that limited nothing.

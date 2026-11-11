@@ -23,4 +23,4 @@
 
 ## What is not solved
 
-A connected client draws a prop from its own copy of the catalogue, so a model that only the server has will not appear on a client. Models that everyone must see belong in the game's pack. See game-playground's `docs/sandbox.md` for the wiring.
+A connected client draws a prop from its own copy of the catalogue, so a model that only the server has will not appear on a client. Models that everyone must see belong in the game's pack. See game-playlot's `docs/sandbox.md` for the wiring.

@@ -48,7 +48,7 @@ The clock the cooldown runs on is **simulated seconds, advanced by the host**, n
 
 Beside the cost budget, every definition has a `limit_group` (empty is `props`) and `DotPropLimits.group_limits` caps how many of each group one player may have: a count, not a cost, because "how much of the simulation is yours" and "how many NPCs do you have" are different questions. A refusal names the group ("You have reached your npcs limit (10)."), because "you are at your limit" with a budget left over reads as the server being wrong.
 
-`DotPropSpawner.limit_resolver` is `func(player_id, key, base) -> int`, asked for `budget`, `frozen` and every group: the game decides who gets more. Who a player is (an admin, a supporter, somebody in a site group) is not this addon's business. `limit_for`, `group_count` and `group_usage` are what a HUD or a `limits` command reads. game-playground is the consumer (`pg_max_<group>` and per-role overrides).
+`DotPropSpawner.limit_resolver` is `func(player_id, key, base) -> int`, asked for `budget`, `frozen` and every group: the game decides who gets more. Who a player is (an admin, a supporter, somebody in a site group) is not this addon's business. `limit_for`, `group_count` and `group_usage` are what a HUD or a `limits` command reads. game-playlot is the consumer (`pg_max_<group>` and per-role overrides).
 
 ## Ownership and undo are two different lists
 
@@ -77,7 +77,7 @@ Passing the undo depth means the oldest can no longer be undone. It does not mea
 - A chain deeper than `max_depth` (8), such as a door wired back to whatever opened it, stops once, with a warning.
 - Server-authoritative and not replicated: a client learns what a door did from the door.
 
-game-playground's buttons, levers and doors are the first user.
+game-playlot's buttons, levers and doors are the first user.
 
 ## Deliberately not here
 

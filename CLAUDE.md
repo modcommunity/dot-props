@@ -38,7 +38,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 - The family's two steps ([family CLAUDE.md](../../CLAUDE.md#validating-anything)), then `godot --headless --path . res://examples/props_selftest.tscn`.
 - A limit must be tested against real bodies in a real tree: one that counted a dictionary would pass while the scene filled up.
 - A physics assertion reads after the step that consumed the impulse, and says what it excludes, or it is measuring gravity. [damage-and-carry](docs/damage-and-carry.md#testing-physics)
-- game-playground (spawning, tools, IO), mg-buses-from-hell (damage, carry), mg-prop-hunt and game-hide-n-seek (`hunt/`), game-hide-n-seek (`toys/`) are the consumers; the mass bug was found from a game.
+- game-playlot (spawning, tools, IO), mg-buses-from-hell (damage, carry), mg-prop-hunt and game-hide-n-seek (`hunt/`), game-hide-n-seek (`toys/`) are the consumers; the mass bug was found from a game.
 - After touching a toy's look, `xvfb-run -a godot --path . res://examples/toy_gallery.tscn -- --kick` and look at `screenshots/toys.png`.
 
 ## Rules that bite
@@ -89,7 +89,7 @@ Read the family [CLAUDE.md](../../CLAUDE.md) first; this file is only what is sp
 | A new tool | `DotPropTool` subclass |
 | Telling the player why a spawn failed | `DotPropSpawner.refused` |
 | Doing something to everything in the world | `DotPropSpawner.all_props`, which hands out a copy |
-| A prop that has code behind it | `DotPropDef.meta`, read on `spawned`. See game-playground's entities |
+| A prop that has code behind it | `DotPropDef.meta`, read on `spawned`. See game-playlot's entities |
 | Buttons, levers, doors | `DotPropIO`, with `outputs` / `inputs` in the definition's meta |
 | What breaks, and what a blast does | `DotPropDef` damage fields; `DotPropDamage.exploded` connected to dot-combat |
 | Riding a prop | `DotPropCarry`, fed the motor's `ground_id` |
