@@ -267,7 +267,7 @@ static func measure(path: String, scale: float, shape_name: String = "convex") -
 
 ## A fresh copy of the model, scaled and centred as [method measure] says, ready to be a
 ## child of the body. Scaled on a plain node above the meshes: the body itself must never
-## be scaled (see game-playground's notes on resizing).
+## be scaled (see game-playlot's notes on resizing).
 static func visual(path: String, scale: float, offset: Vector3) -> Node3D:
 	var loaded := load_scene(path)
 

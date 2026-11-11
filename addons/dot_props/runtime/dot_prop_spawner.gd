@@ -163,7 +163,7 @@ func spawn(
 	# refused by a physics gun for being too heavy and then thrown like a beach ball
 	# by a gravity gun. Nothing errors either way, and the two numbers are only ever
 	# compared by a player wondering why. A game that ships one scene for a dozen
-	# props — which is the cheap way to do it, and what game-playground does — has
+	# props — which is the cheap way to do it, and what game-playlot does — has
 	# every one of them at the same mass without this line.
 	#
 	# Assigned before the body is in the tree, so the first physics step already sees
